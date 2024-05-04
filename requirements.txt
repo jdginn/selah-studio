@@ -1,1 +1,5 @@
-pyroomacoustics==0.7.4
+matplotlib==3.8.4
+numpy
+trimesh
+networkx
+lxml
