@@ -13,15 +13,6 @@ import IPython
 
 namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
 
-# Objects contain:
-#   name: string
-#   material: string
-#   vertices: numpy.ndarray
-#       array of vertices of shape (n_vertices, 3)
-#   faces: numpy.ndarray
-#       array of faces of shape (n_faces, 3)
-#
-
 
 class Material:
     # name: string
@@ -33,6 +24,12 @@ class Material:
 
 
 class Wall:
+    #   name: string
+    #   material: string
+    #   vertices: numpy.ndarray
+    #       array of vertices of shape (n_vertices, 3)
+    #   faces: numpy.ndarray
+    #       array of faces of shape (n_faces, 3)
     def __init__(self, tree: ET.Element):
         self.name = tree.get("name")
         mesh = tree.find("schema:mesh", namespace)
@@ -58,6 +55,12 @@ class Wall:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
     parser.add_argument("--file", type=str, required=True, help="Path to 3mf file")
+    parser.add_argument(
+        "-simplify",
+        action="store_const",
+        const=True,
+        help="Set to simplify meshes for faster compute",
+    )
     args = parser.parse_args()
 
     z = zipfile.ZipFile(args.file)
@@ -67,14 +70,15 @@ if __name__ == "__main__":
     if res is None:
         raise RuntimeError
     objects = [Wall(o) for o in res.findall("schema:object", namespace)]
+    if args.simplify:
+        for o in objects:
+            simplifier = pyfqmr.Simplify()
+            simplifier.setMesh(o.vertices, o.triangles)
+            simplifier.simplify_mesh(
+                target_count=100, aggressiveness=8, preserve_border=True, verbose=10
+            )
 
-    # simplifier = pyfqmr.Simplify()
-    # simplifier.setMesh(mg.vertices, mg.faces)
-    # simplifier.simplify_mesh(
-    #     target_count=100, aggressiveness=8, preserve_border=True, verbose=10
-    # )
-
-    IPython.embed()
+    # IPython.embed()
 
     # mesh = tr.load(args.file, file_type="3mf")
     # ntriang, nvec, npts = the_mesh.vectors.shape
