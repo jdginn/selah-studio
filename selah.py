@@ -6,11 +6,54 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyfqmr
 import trimesh as tr
-from stl import mesh
+
+# from stl import mesh
 
 import IPython
 
 namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
+
+# Objects contain:
+#   name: string
+#   material: string
+#   vertices: numpy.ndarray
+#       array of vertices of shape (n_vertices, 3)
+#   faces: numpy.ndarray
+#       array of faces of shape (n_faces, 3)
+#
+
+
+class Material:
+    # name: string
+    # absorption: ?
+    # scattering: ?
+    # diffusion: ?
+    def __init__(self):
+        pass
+
+
+class Wall:
+    def __init__(self, tree: ET.Element):
+        self.name = tree.get("name")
+        mesh = tree.find("schema:mesh", namespace)
+        if mesh is None:
+            raise RuntimeError
+        meshv = mesh.find("schema:vertices", namespace)
+        if meshv is None:
+            raise RuntimeError
+        vertices = [v for v in meshv.iter()]
+        self.vertices = np.ndarray(shape=(len(vertices), 3))
+        for i, v in enumerate(vertices):
+            self.vertices[i] = [v.get("x"), v.get("y"), v.get("z")]
+        mesht = mesh.find("schema:triangles", namespace)
+        if mesht is None:
+            raise RuntimeError
+        triangles = [t for t in mesht.iter()]
+        self.triangles = np.ndarray(shape=(len(triangles), 3))
+        for i, t in enumerate(triangles):
+            self.triangles[i] = [t.get("v1"), t.get("v2"), t.get("v3")]
+        pass
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
@@ -20,11 +63,16 @@ if __name__ == "__main__":
     z = zipfile.ZipFile(args.file)
     f = z.extract("3D/3dmodel.model")
     tree = ET.parse(f)
-    objects = (
-        tree.getroot()
-        .find("schema:resources", namespace)
-        .findall("schema:object", namespace)
-    )
+    res = tree.getroot().find("schema:resources", namespace)
+    if res is None:
+        raise RuntimeError
+    objects = [Wall(o) for o in res.findall("schema:object", namespace)]
+
+    # simplifier = pyfqmr.Simplify()
+    # simplifier.setMesh(mg.vertices, mg.faces)
+    # simplifier.simplify_mesh(
+    #     target_count=100, aggressiveness=8, preserve_border=True, verbose=10
+    # )
 
     IPython.embed()
 
