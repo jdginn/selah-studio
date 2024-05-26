@@ -68,7 +68,7 @@ class Wall:
 
 def build_room(walls: typing.List[Wall]) -> pra.Room:
     reduc = 1000.0
-    mat = pra.Material(energy_absorption=0.2, scattering=0.001)
+    mat = pra.Material(energy_absorption=0.2, scattering=0.2)
     _walls = []
     for w in walls:
         # w.simplify()
@@ -91,34 +91,10 @@ def build_room(walls: typing.List[Wall]) -> pra.Room:
     return pra.Room(
         _walls,
         fs=8000,
-        max_order=2,
+        max_order=3,
         ray_tracing=False,
         air_absorption=False,
     )
-
-
-class Room:
-    reduc = 1000.0
-    mat = pra.Material(energy_absorption=0.1, scattering=0.1)
-
-    def __init__(self, walls: typing.List[Wall]):
-        self._walls = []
-        for w in walls:
-            for tri in w.triangles:
-                w.vertices[tri[0]]
-                corner = np.array(
-                    [w.vertices[tri[0]], w.vertices[tri[1]], w.vertices[tri[2]]],
-                    dtype=np.float32,
-                )
-                self._walls.append(
-                    pra.Wall(
-                        corner / Room.reduc,
-                        Room.mat.energy_absorption["coeffs"],
-                        Room.mat.scattering["coeffs"],
-                    )
-                )
-
-        pass
 
 
 if __name__ == "__main__":
