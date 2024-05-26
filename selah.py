@@ -230,10 +230,10 @@ class Room:
     def __init__(self, walls: typing.List[Wall]):
         self.walls = walls
         reduc = 1000.0
-        mat = pra.Material(energy_absorption=0.2, scattering=0.2)
+        mat = pra.Material(energy_absorption=0.0, scattering=0.0)
         _pra_walls = []
         for w in walls:
-            # w.simplify()
+            w.simplify()
             for tri in w.triangles:
                 corner = np.array(
                     [
@@ -306,19 +306,20 @@ if __name__ == "__main__":
     room.pra_room.image_source_model()
     room.pra_room.ray_tracing()
     room.pra_room.compute_rir()
-    # for s in room.sources:
-    #     # s.set_ordering("strongest")
-    #     for i in s.images:
-    #         print("image:")
-    #         print(i)
+    # IPython.embed()
+    for s in room.pra_room.sources:
+        s.set_ordering("order")
+        for i in s.images:
+            print("image:")
+            print(i)
     room.pra_room.plot_rir()
-    plt.xlim(0, 150)
+    plt.xlim(0, 60)
     plt.savefig("imgs/stl_rir_plot.png")
     plt.show()
 
-    # # # show the room
-    # room.plot(img_order=1, mic_marker_size=25)
-    # plt.ylim(0, 10)
-    # plt.xlim(0, 10)
-    # plt.savefig("imgs/stl_room.png")
-    # plt.show()
+    # show the room
+    room.pra_room.plot(img_order=1, mic_marker_size=1, figsize=(10, 10))
+    plt.ylim(0, 6)
+    plt.xlim(0, 6)
+    plt.savefig("imgs/stl_room.png")
+    plt.show()
