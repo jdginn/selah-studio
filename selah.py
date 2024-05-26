@@ -318,7 +318,7 @@ if __name__ == "__main__":
     plt.show()
 
     # show the room
-    room.pra_room.plot(img_order=1, mic_marker_size=1, figsize=(10, 10))
+    room.pra_room.plot(img_order=0, mic_marker_size=1, figsize=(10, 10))
     plt.ylim(0, 6)
     plt.xlim(0, 6)
     plt.savefig("imgs/stl_room.png")
