@@ -3,6 +3,7 @@ from math import dist
 import zipfile
 import xml.etree.ElementTree as ET
 import pyroomacoustics as pra
+
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
@@ -139,37 +140,6 @@ class Wall:
                 return max_z - min_z
 
 
-def build_room(walls: typing.List[Wall]) -> pra.Room:
-    reduc = 1000.0
-    mat = pra.Material(energy_absorption=0.2, scattering=0.2)
-    _walls = []
-    for w in walls:
-        # w.simplify()
-        for tri in w.triangles:
-            corner = np.array(
-                [
-                    w.vertices[int(tri[0])],
-                    w.vertices[int(tri[1])],
-                    w.vertices[int(tri[2])],
-                ],
-                dtype=np.float32,
-            )
-            _walls.append(
-                pra.Wall(
-                    corner.T / reduc,
-                    mat.energy_absorption["coeffs"],
-                    mat.scattering["coeffs"],
-                )
-            )
-    return pra.Room(
-        _walls,
-        fs=8000,
-        max_order=3,
-        ray_tracing=False,
-        air_absorption=False,
-    )
-
-
 class ListeningTriangle:
 
     def __init__(
@@ -230,10 +200,10 @@ class Room:
     def __init__(self, walls: typing.List[Wall]):
         self.walls = walls
         reduc = 1000.0
-        mat = pra.Material(energy_absorption=0.0, scattering=0.0)
+        mat = pra.Material(energy_absorption=0.2, scattering=0.0)
         _pra_walls = []
         for w in walls:
-            w.simplify()
+            # w.simplify()
             for tri in w.triangles:
                 corner = np.array(
                     [
@@ -252,8 +222,8 @@ class Room:
                 )
         self.pra_room = pra.Room(
             _pra_walls,
-            fs=8000,
-            max_order=3,
+            fs=44100,
+            max_order=1,
             ray_tracing=False,
             air_absorption=False,
         )
@@ -283,7 +253,6 @@ if __name__ == "__main__":
     if res is None:
         raise RuntimeError
     objects = [Wall(o) for o in res.findall("schema:object", namespace)]
-    # room = build_room(objects)
     room = Room(objects)
     print("Front")
     axis, pos = room.get_wall("Front").pos(0)
@@ -300,25 +269,25 @@ if __name__ == "__main__":
     print("mic:")
     pprint.pprint(critical / 1000)
     room.pra_room.add_source(l_speaker / 1000)
-    room.pra_room.add_microphone_array(np.c_[critical / 1000])
+    room.pra_room.add_microphone(critical / 1000)
 
     # compute the rir
     room.pra_room.image_source_model()
     room.pra_room.ray_tracing()
     room.pra_room.compute_rir()
-    # IPython.embed()
-    for s in room.pra_room.sources:
-        s.set_ordering("order")
-        for i in s.images:
-            print("image:")
-            print(i)
-    room.pra_room.plot_rir()
-    plt.xlim(0, 60)
-    plt.savefig("imgs/stl_rir_plot.png")
-    plt.show()
+    IPython.embed()
+    # for s in room.pra_room.sources:
+    #     s.set_ordering("order")
+    #     for i in s.images:
+    #         print("image:")
+    #         print(i)
+    # room.pra_room.plot_rir()
+    # plt.xlim(0, 60)
+    # plt.savefig("imgs/stl_rir_plot.png")
+    # plt.show()
 
     # show the room
-    room.pra_room.plot(img_order=0, mic_marker_size=1, figsize=(10, 10))
+    room.pra_room.plot(img_order=2, mic_marker_size=4, figsize=(10, 10))
     plt.ylim(0, 6)
     plt.xlim(0, 6)
     plt.savefig("imgs/stl_room.png")

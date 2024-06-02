@@ -1,6 +1,6 @@
 pyroomacoustics==0.7.4
 numpy-stl
-matplotlib
+matplotlib==3.8.4
 numpy
 trimesh
 pyfqmr
