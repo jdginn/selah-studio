@@ -1,8 +1,10 @@
 import argparse
 from math import dist
+from dataclasses import dataclass
 import zipfile
 import xml.etree.ElementTree as ET
 import pyroomacoustics as pra
+import pyroomacoustics.libroom as libroom
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -194,16 +196,23 @@ class ListeningTriangle:
         pass
 
 
+@dataclass
+class Hit:
+    pos: np.ndarray
+    wall: Wall
+    parent: typing.Union[Wall, np.ndarray]
+
+
 class Room:
 
-    # TODO: probably need sto be fleshed out better
+    # TODO: probably needs to be fleshed out better
     def __init__(self, walls: typing.List[Wall]):
         self.walls = walls
         reduc = 1000.0
-        mat = pra.Material(energy_absorption=0.2, scattering=0.0)
+        mat = pra.Material(energy_absorption=0.1, scattering=0.2)
         _pra_walls = []
         for w in walls:
-            # w.simplify()
+            w.simplify()
             for tri in w.triangles:
                 corner = np.array(
                     [
@@ -223,16 +232,33 @@ class Room:
         self.pra_room = pra.Room(
             _pra_walls,
             fs=44100,
-            max_order=1,
-            ray_tracing=False,
+            max_order=3,
+            ray_tracing=True,
             air_absorption=False,
         )
 
-    def get_wall(self, name: str) -> Wall:
+    # Stub to provide type awareness
+    #
+    # Also, most of what we use pra_room for is accessing the internal engine, since we wrap
+    # most of the higher-level function in our own class here.
+    @property
+    def engine(self) -> libroom.Room:
+        return self.pra_room.room_engine
+
+    def get_wall(self, name: str | int) -> Wall:
         for w in self.walls:
             if w.name == name:
                 return w
         raise RuntimeError
+
+    def trace(self, lt: ListeningTriangle) -> typing.List[Hit]:
+        hits: typing.List[Hit] = []
+        l_speaker, r_speaker, crit = lt.positions()
+        next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
+            l_speaker / 1000, crit / 1000, False
+        )
+        hits.append(Hit(next_hit, self.engine.get_wall(next_wall_index), l_speaker))
+        return hits
 
 
 if __name__ == "__main__":
@@ -270,25 +296,25 @@ if __name__ == "__main__":
     pprint.pprint(critical / 1000)
     room.pra_room.add_source(l_speaker / 1000)
     room.pra_room.add_microphone(critical / 1000)
-
-    # compute the rir
-    room.pra_room.image_source_model()
-    room.pra_room.ray_tracing()
-    room.pra_room.compute_rir()
     IPython.embed()
-    # for s in room.pra_room.sources:
-    #     s.set_ordering("order")
-    #     for i in s.images:
-    #         print("image:")
-    #         print(i)
+
+    # # compute the rir
+    # # room.pra_room.image_source_model()
+    # room.pra_room.ray_tracing()
+    # room.pra_room.compute_rir()
+    # # for s in room.pra_room.sources:
+    # #     s.set_ordering("order")
+    # #     for i in s.images:
+    # #         print("image:")
+    # #         print(i)
     # room.pra_room.plot_rir()
     # plt.xlim(0, 60)
     # plt.savefig("imgs/stl_rir_plot.png")
     # plt.show()
 
     # show the room
-    room.pra_room.plot(img_order=2, mic_marker_size=4, figsize=(10, 10))
-    plt.ylim(0, 6)
-    plt.xlim(0, 6)
-    plt.savefig("imgs/stl_room.png")
-    plt.show()
+    # room.pra_room.plot(img_order=2, mic_marker_size=4, figsize=(10, 10))
+    # plt.ylim(0, 6)
+    # plt.xlim(0, 6)
+    # plt.savefig("imgs/stl_room.png")
+    # plt.show()
