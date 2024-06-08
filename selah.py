@@ -222,13 +222,13 @@ class Room:
                     ],
                     dtype=np.float32,
                 )
-                _pra_walls.append(
-                    pra.Wall(
-                        corner.T / reduc,
-                        mat.energy_absorption["coeffs"],
-                        mat.scattering["coeffs"],
-                    )
+                pw = pra.Wall(
+                    corner.T / reduc,
+                    mat.energy_absorption["coeffs"],
+                    mat.scattering["coeffs"],
                 )
+                pw.name = w.name
+                _pra_walls.append(pw)
         self.pra_room = pra.Room(
             _pra_walls,
             fs=44100,
@@ -255,17 +255,18 @@ class Room:
         max_dist = self.engine.get_max_distance()
         l_speaker, r_speaker, crit = lt.positions()
         hits: typing.List[Hit] = [Hit(l_speaker / 1000, None, None)]
+        print(f"Origin: {l_speaker / 1000}")
+        print(f"Listening: {crit / 1000}")
         next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
             l_speaker / 1000, crit / 1000 + max_dist, False
         )
-        print(f"Reflection location: {next_hit}")
         w: libroom.Wall = self.engine.get_wall(next_wall_index)
-        print(f"Wall index: {next_wall_index}")
+        print(f"First hit: {w.name}: {next_hit}")
         hits.append(Hit(next_hit, w, l_speaker))
         p2 = np.empty([3, 1], dtype="float32")
         w.reflect(l_speaker, p2)
-        print(f"Reflected direction: {p2}")
-        order = 15
+        # print(f"Reflected direction: {p2}")
+        order = 5
         for i in range(order):
             next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
                 hits[i - 1].pos, p2 + max_dist, False
@@ -273,13 +274,12 @@ class Room:
             w: libroom.Wall = self.engine.get_wall(next_wall_index)
             hits.append(Hit(next_hit, w, hits[i - 1].pos))
             p2 = np.empty([3, 1], dtype="float32")
-            w.reflect(l_speaker, p2)
-            print(f"Reflected direction: {p2}")
+            w.reflect(hits[i - 1].pos, p2)
+            # print(f"Reflected direction: {p2}")
             # IPython.embed()
             # wall: libroom.Wall = self.engine.get_wall(next_wall_index)
             # hits.append(Hit(next_hit, self.engine.get_wall(next_wall_index), l_speaker))
-            print("Next hit:")
-            pprint.pprint(next_hit)
+            print(f"Next hit: {w.name}: {next_hit}")
         return hits
 
 
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     room = Room(objects)
     print("Front")
     axis, pos = room.get_wall("Front").pos(0)
-    pprint.pprint((axis, pos))
+    pprin.pprint((axis, pos))
     print("center:")
     pprint.pprint(room.get_wall("Front").center_pos())
     print("width:")
@@ -330,11 +330,10 @@ if __name__ == "__main__":
     # plt.show()
 
     # show the room
-    room.pra_room.plot(img_order=0, mic_marker_size=0, figsize=(10, 10))
-    for hit in hits:
-        pprint.pprint(hit.pos)
-        plt.scatter(hit.pos[0], hit.pos[1], hit.pos[2], c=30)
-    plt.ylim(0, 6)
-    plt.xlim(0, 6)
-    plt.savefig("imgs/stl_room.png")
-    plt.show()
+    # room.pra_room.plot(img_order=0, mic_marker_size=0, figsize=(10, 10))
+    # for hit in hits:
+    #     plt.scatter(hit.pos[0], hit.pos[1], hit.pos[2], c=30)
+    # plt.ylim(0, 6)
+    # plt.xlim(0, 6)
+    # plt.savefig("imgs/stl_room.png")
+    # plt.show()
