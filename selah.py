@@ -252,12 +252,31 @@ class Room:
         raise RuntimeError
 
     def trace(self, lt: ListeningTriangle) -> typing.List[Hit]:
-        hits: typing.List[Hit] = []
+        max_dist = self.engine.get_max_distance()
         l_speaker, r_speaker, crit = lt.positions()
+        hits: typing.List[Hit] = [Hit(l_speaker / 1000, None, None)]
         next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
-            l_speaker / 1000, crit / 1000, False
+            l_speaker / 1000, crit / 1000 + max_dist, False
         )
-        hits.append(Hit(next_hit, self.engine.get_wall(next_wall_index), l_speaker))
+        print(f"Reflection location: {next_hit}")
+        w: libroom.Wall = self.engine.get_wall(next_wall_index)
+        print(f"Wall index: {next_wall_index}")
+        hits.append(Hit(next_hit, w, l_speaker))
+        p2 = np.empty([3, 1], dtype="float32")
+        w.reflect(l_speaker, p2)
+        print(f"Reflected direction: {p2}")
+        p2 += max_dist
+        order = 15
+        for i in range(order):
+            next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
+                l_speaker / 1000, crit / 1000 + self.engine.get_max_distance(), False
+            )
+            # IPython.embed()
+            # wall: libroom.Wall = self.engine.get_wall(next_wall_index)
+            # hits.append(Hit(next_hit, self.engine.get_wall(next_wall_index), l_speaker))
+            print("Next hit:")
+            pprint.pprint(next_hit)
+            hits.append(Hit(next_hit, None, hits[i]))
         return hits
 
 
@@ -287,16 +306,11 @@ if __name__ == "__main__":
     pprint.pprint(room.get_wall("Front").center_pos())
     print("width:")
     pprint.pprint(room.get_wall("Front").width(Axis.Y))
-    l_speaker, r_speaker, critical = ListeningTriangle(
-        room.get_wall("Front"), 1800, 300, 650
-    ).positions()
-    print("source:")
-    pprint.pprint(l_speaker / 1000)
-    print("mic:")
-    pprint.pprint(critical / 1000)
-    room.pra_room.add_source(l_speaker / 1000)
-    room.pra_room.add_microphone(critical / 1000)
-    IPython.embed()
+    lt = ListeningTriangle(room.get_wall("Front"), 1800, 300, 650)
+    # room.pra_room.add_source(l_speaker / 1000)
+    # room.pra_room.add_microphone(critical / 1000)
+    hits = room.trace(lt)
+    # IPython.embed()
 
     # # compute the rir
     # # room.pra_room.image_source_model()
@@ -313,8 +327,11 @@ if __name__ == "__main__":
     # plt.show()
 
     # show the room
-    # room.pra_room.plot(img_order=2, mic_marker_size=4, figsize=(10, 10))
-    # plt.ylim(0, 6)
-    # plt.xlim(0, 6)
-    # plt.savefig("imgs/stl_room.png")
-    # plt.show()
+    room.pra_room.plot(img_order=0, mic_marker_size=0, figsize=(10, 10))
+    for hit in hits:
+        pprint.pprint(hit.pos)
+        plt.scatter(hit.pos[0], hit.pos[1], hit.pos[2], c=30)
+    plt.ylim(0, 6)
+    plt.xlim(0, 6)
+    plt.savefig("imgs/stl_room.png")
+    plt.show()
