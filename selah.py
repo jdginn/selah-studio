@@ -265,18 +265,21 @@ class Room:
         p2 = np.empty([3, 1], dtype="float32")
         w.reflect(l_speaker, p2)
         print(f"Reflected direction: {p2}")
-        p2 += max_dist
         order = 15
         for i in range(order):
             next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
-                l_speaker / 1000, crit / 1000 + self.engine.get_max_distance(), False
+                hits[i - 1].pos, p2 + max_dist, False
             )
+            w: libroom.Wall = self.engine.get_wall(next_wall_index)
+            hits.append(Hit(next_hit, w, hits[i - 1].pos))
+            p2 = np.empty([3, 1], dtype="float32")
+            w.reflect(l_speaker, p2)
+            print(f"Reflected direction: {p2}")
             # IPython.embed()
             # wall: libroom.Wall = self.engine.get_wall(next_wall_index)
             # hits.append(Hit(next_hit, self.engine.get_wall(next_wall_index), l_speaker))
             print("Next hit:")
             pprint.pprint(next_hit)
-            hits.append(Hit(next_hit, None, hits[i]))
         return hits
 
 
