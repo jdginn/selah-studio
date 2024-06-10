@@ -335,33 +335,28 @@ class Room:
         max_dist = self.engine.get_max_distance()
         l_speaker, r_speaker, crit = lt.positions()
         hits: typing.List[Hit] = [Hit(l_speaker, None, None)]
-        print(f"Origin: {l_speaker}")
-        print(f"Listening: {crit}")
+
+        norm = dir_from_points(l_speaker, crit)
+
+        source = l_speaker
         # First compute normal of wall
         # Then add/subtract directions from the normal based on a dispersion
-        norm = dir_from_points(l_speaker, crit)
         dir = norm
         print(f"Incident: {dir}")
-        next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
-            l_speaker,
-            l_speaker + dir * max_dist,
-            False,
-        )
-        w: libroom.Wall = self.engine.get_wall(next_wall_index)
-        hits.append(Hit(next_hit, w, l_speaker))
-        dir = w.normal_reflect(dir)
-        print(f"Hit 0: {w.name}: {dir} -> {next_hit}")
+
         order = 5
         for i in range(order):
             next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
-                hits[i - 1].pos,
-                hits[i - 1].pos + dir * max_dist,
+                source,
+                source + dir * max_dist,
                 False,
             )
             w: libroom.Wall = self.engine.get_wall(next_wall_index)
-            hits.append(Hit(next_hit, w, hits[i - 1].pos))
+            hits.append(Hit(next_hit, w, l_speaker))
             dir = w.normal_reflect(dir)
+            source = next_hit
             print(f"Hit {i}: {w.name}: {dir} -> {next_hit}")
+
         return hits
 
 
