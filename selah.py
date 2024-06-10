@@ -342,20 +342,34 @@ class Room:
         # First compute normal of wall
         # Then add/subtract directions from the normal based on a dispersion
         dir = norm
-        print(f"Incident: {dir}")
+        print(f"Source: {source} -> {dir}")
 
         order = 5
         for i in range(order):
-            next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
-                source,
-                source + dir * max_dist,
-                False,
-            )
-            w: libroom.Wall = self.engine.get_wall(next_wall_index)
-            hits.append(Hit(next_hit, w, l_speaker))
-            dir = w.normal_reflect(dir)
+            temp_dist = max_dist
+            hit_dist = max_dist
+            next_hit = np.empty([3], dtype="float32")
+            wall: typing.Union[None, libroom.Wall] = None
+
+            for w in self.engine.walls:
+                temp_hit = np.empty([3], dtype="float32")
+                if w.intersection(source, source + dir * max_dist, temp_hit) > -1:
+                    temp_dist = np.linalg.norm(temp_hit - source)
+                    if temp_dist > 0.00001 and temp_dist < hit_dist:
+                        hit_dist = temp_dist
+                        next_hit = temp_hit
+                        wall = w
+
+            if wall is None:
+                raise RuntimeError
+
+            # print(f"Wall {wall.name}, Norm: {wall.normal}")
+            # dir = dir - w.normal * 2 * dir.dot(wall.normal)
+            dir = wall.normal_reflect(dir)
+
+            hits.append(Hit(next_hit, wall, source))
             source = next_hit
-            print(f"Hit {i}: {w.name}: {dir} -> {next_hit}")
+            print(f"Hit {i}: {wall.name}: {next_hit} -> {dir}")
 
         return hits
 
@@ -383,15 +397,11 @@ if __name__ == "__main__":
     room = Room(objects)
     print("Front")
     axis, pos = room.get_wall("Front").pos(0)
-    pprint.pprint((axis, pos))
-    print("center:")
-    pprint.pprint(room.get_wall("Front").center_pos())
-    print("width:")
-    pprint.pprint(room.get_wall("Front").width(Axis.Y))
-    lt = ListeningTriangle(room.get_wall("Front"), 1.8, 0.3, 0.65, Source())
-    # room.pra_room.add_source(l_speaker / 1000)
-    # room.pra_room.add_microphone(critical / 1000)
+    lt = ListeningTriangle(room.get_wall("Front"), 0.8, 0.3, 0.65, Source())
     hits = room.trace(lt)
+
+    # room.pra_room.add_source(l_speaker)
+    # room.pra_room.add_microphone(critical)
 
     # # compute the rir
     # # room.pra_room.image_source_model()
