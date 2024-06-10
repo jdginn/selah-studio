@@ -363,9 +363,8 @@ class Room:
             if wall is None:
                 raise RuntimeError
 
-            # print(f"Wall {wall.name}, Norm: {wall.normal}")
-            # dir = dir - w.normal * 2 * dir.dot(wall.normal)
-            dir = wall.normal_reflect(dir)
+            dir = dir - w.normal * 2 * dir.dot(wall.normal)
+            # dir = wall.normal_reflect(dir)
 
             hits.append(Hit(next_hit, wall, source))
             source = next_hit
