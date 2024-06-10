@@ -43,6 +43,8 @@ class Material:
 
 
 class Wall:
+    reduc = 1000.0
+
     #   name: string
     #   material: string
     #   vertices: numpy.ndarray
@@ -61,7 +63,11 @@ class Wall:
         vertices = [v for v in meshv.iter()]
         self.vertices = np.ndarray(shape=(len(vertices) - 1, 3))
         for i, v in enumerate(vertices[1:]):
-            self.vertices[i] = [v.get("x"), v.get("y"), v.get("z")]
+            self.vertices[i] = [
+                float(v.get("x")) / self.reduc,
+                float(v.get("y")) / self.reduc,
+                float(v.get("z")) / self.reduc,
+            ]
         mesht = mesh.find("schema:triangles", namespace)
         if mesht is None:
             raise RuntimeError
@@ -142,18 +148,93 @@ class Wall:
                 return max_z - min_z
 
 
+class Source:
+    """Dispersions in degrees"""
+
+    def __init__(self, horiz_disp: float = 60, vert_disp: float = 20) -> None:
+        self.horiz_disp = horiz_disp
+        self.vert_disp = vert_disp
+
+
+def dir_from_points(p1, p2: npt.NDArray) -> npt.NDArray:
+    unscaled = p2 - p1
+    return unscaled / np.linalg.norm(unscaled)
+
+
 class ListeningTriangle:
 
     def __init__(
-        self, wall: Wall, height: float, dist_from_wall: float, dist_from_center: float
+        self,
+        wall: Wall,
+        height: float,
+        dist_from_wall: float,
+        dist_from_center: float,
+        source: Source,
     ) -> None:
         self._wall = wall
         self.height = height
         self.dist_from_wall = dist_from_wall
         self.dist_from_center = dist_from_center
+        self.source = source
 
         self._axis, self._wall_pos = self._wall.pos(self.height)
+        match self._axis:
+            case Axis.X:
+                if self.dist_from_center > self._wall.width(Axis.Y) / 2.0:
+                    raise RuntimeError("attempting to locate speaker outside of room")
+
         # TODO: need to know which direction from the wall is interior vs exterior
+
+    def l_source(self) -> npt.NDArray:
+        p = self._wall.center_pos()
+        match self._axis:
+            case Axis.X:
+                return np.array(
+                    [
+                        self._wall_pos + self.dist_from_wall,
+                        p[1] - self.dist_from_center,
+                        self.height,
+                    ],
+                    dtype="float32",
+                )
+            case Axis.Y:
+                raise RuntimeError
+            case Axis.Z:
+                raise RuntimeError
+
+    def r_source(self) -> npt.NDArray:
+        p = self._wall.center_pos()
+        match self._axis:
+            case Axis.X:
+                return np.array(
+                    [
+                        self._wall_pos + self.dist_from_wall,
+                        p[1] + self.dist_from_center,
+                        self.height,
+                    ],
+                    dtype="float32",
+                )
+            case Axis.Y:
+                raise RuntimeError
+            case Axis.Z:
+                raise RuntimeError
+
+    def listening_pos(self) -> npt.NDArray:
+        p = self._wall.center_pos()
+        match self._axis:
+            case Axis.X:
+                return np.array(
+                    [
+                        self._wall_pos + self.dist_from_wall,
+                        p[1] + self.dist_from_center,
+                        self.height,
+                    ],
+                    dtype="float32",
+                )
+            case Axis.Y:
+                raise RuntimeError
+            case Axis.Z:
+                raise RuntimeError
 
     def positions(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         p = self._wall.center_pos()
@@ -190,7 +271,7 @@ class ListeningTriangle:
                     ),
                 )
             case Axis.Y:
-                axis = Axis.X
+                raise RuntimeError
             case Axis.Z:
                 raise RuntimeError
         pass
@@ -208,11 +289,10 @@ class Room:
     # TODO: probably needs to be fleshed out better
     def __init__(self, walls: typing.List[Wall]):
         self.walls = walls
-        reduc = 1000.0
         mat = pra.Material(energy_absorption=0.1, scattering=0.2)
         _pra_walls = []
         for w in walls:
-            w.simplify()
+            # w.simplify()
             for tri in w.triangles:
                 corner = np.array(
                     [
@@ -223,7 +303,7 @@ class Room:
                     dtype=np.float32,
                 )
                 pw = pra.Wall(
-                    corner.T / reduc,
+                    corner.T,
                     mat.energy_absorption["coeffs"],
                     mat.scattering["coeffs"],
                 )
@@ -254,35 +334,34 @@ class Room:
     def trace(self, lt: ListeningTriangle) -> typing.List[Hit]:
         max_dist = self.engine.get_max_distance()
         l_speaker, r_speaker, crit = lt.positions()
-        hits: typing.List[Hit] = [Hit(l_speaker / 1000, None, None)]
-        print(f"Origin: {l_speaker / 1000}")
-        print(f"Listening: {crit / 1000}")
+        hits: typing.List[Hit] = [Hit(l_speaker, None, None)]
+        print(f"Origin: {l_speaker}")
+        print(f"Listening: {crit}")
+        # First compute normal of wall
+        # Then add/subtract directions from the normal based on a dispersion
+        norm = dir_from_points(l_speaker, crit)
+        dir = norm
+        print(f"Incident: {dir}")
         next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
-            # l_speaker / 1000, crit / 1000 + max_dist, False
-            l_speaker / 1000,
-            crit / 1000,
+            l_speaker,
+            l_speaker + dir * max_dist,
             False,
         )
-        print(f"Wall index: {next_wall_index}")
         w: libroom.Wall = self.engine.get_wall(next_wall_index)
-        print(f"First hit: {w.name}: {next_hit}")
         hits.append(Hit(next_hit, w, l_speaker))
-        p2 = np.empty([3, 1], dtype="float32")
-        w.reflect(l_speaker, p2)
+        dir = w.normal_reflect(dir)
+        print(f"Hit 0: {w.name}: {dir} -> {next_hit}")
         order = 5
         for i in range(order):
             next_hit, next_wall_index, hit_dist = self.engine.next_wall_hit(
-                # hits[i - 1].pos, p2 + max_dist, False
                 hits[i - 1].pos,
-                p2,
+                hits[i - 1].pos + dir * max_dist,
                 False,
             )
-            print(f"Wall index: {next_wall_index}")
             w: libroom.Wall = self.engine.get_wall(next_wall_index)
             hits.append(Hit(next_hit, w, hits[i - 1].pos))
-            p2 = np.empty([3, 1], dtype="float32")
-            w.reflect(hits[i - 1].pos, p2)
-            print(f"Next hit: {w.name}: {next_hit}")
+            dir = w.normal_reflect(dir)
+            print(f"Hit {i}: {w.name}: {dir} -> {next_hit}")
         return hits
 
 
@@ -296,6 +375,8 @@ if __name__ == "__main__":
         help="Set to simplify meshes for faster compute",
     )
     args = parser.parse_args()
+
+    # IPython.embed()
 
     z = zipfile.ZipFile(args.file)
     f = z.extract("3D/3dmodel.model")
@@ -312,11 +393,10 @@ if __name__ == "__main__":
     pprint.pprint(room.get_wall("Front").center_pos())
     print("width:")
     pprint.pprint(room.get_wall("Front").width(Axis.Y))
-    lt = ListeningTriangle(room.get_wall("Front"), 1800, 300, 650)
+    lt = ListeningTriangle(room.get_wall("Front"), 1.8, 0.3, 0.65, Source())
     # room.pra_room.add_source(l_speaker / 1000)
     # room.pra_room.add_microphone(critical / 1000)
     hits = room.trace(lt)
-    # IPython.embed()
 
     # # compute the rir
     # # room.pra_room.image_source_model()
