@@ -225,8 +225,10 @@ class ListeningTriangle:
             case Axis.X:
                 return np.array(
                     [
-                        self._wall_pos + self.dist_from_wall,
-                        p[1] + self.dist_from_center,
+                        self._wall_pos
+                        + self.dist_from_wall
+                        + (self.dist_from_center * math.sqrt(3)),
+                        p[1],
                         self.height,
                     ],
                     dtype="float32",
@@ -281,7 +283,7 @@ class ListeningTriangle:
 class Hit:
     pos: np.ndarray
     wall: Wall
-    parent: typing.Union[Wall, np.ndarray]
+    parent: np.ndarray
 
 
 class Room:
@@ -332,9 +334,17 @@ class Room:
         raise RuntimeError
 
     def trace(self, lt: ListeningTriangle) -> typing.List[Hit]:
+        rfz_radius = 0.75
+        time_thresh = 1
+        speed_of_sound = 336
+
+        # TODO: factor in absorptive losses
+
         max_dist = self.engine.get_max_distance()
         l_speaker, r_speaker, crit = lt.positions()
-        hits: typing.List[Hit] = [Hit(l_speaker, None, None)]
+        # hits: typing.List[Hit] = [Hit(l_speaker, None, None)]
+        hits: typing.List[Hit] = []
+        total_dist = 0
 
         norm = dir_from_points(l_speaker, crit)
 
@@ -344,7 +354,7 @@ class Room:
         dir = norm
         print(f"Source: {source} -> {dir}")
 
-        order = 5
+        order = 10
         for i in range(order):
             temp_dist = max_dist
             hit_dist = max_dist
@@ -363,14 +373,39 @@ class Room:
             if wall is None:
                 raise RuntimeError
 
-            dir = dir - w.normal * 2 * dir.dot(wall.normal)
-            # dir = wall.normal_reflect(dir)
+            dir = dir - wall.normal * 2 * dir.dot(wall.normal)
 
             hits.append(Hit(next_hit, wall, source))
+
+            dist_from_crit = np.linalg.norm(
+                np.cross(next_hit - source, crit - source)
+                / np.linalg.norm(next_hit - source)
+            )
+
+            total_dist += hit_dist
+            if dist_from_crit < rfz_radius:
+                print(
+                    f"Hit {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
+                )
+            else:
+                print(f"Hit {i}: {wall.name}: {next_hit} -> {dir}")
+            if total_dist / speed_of_sound > time_thresh:
+                break
+
             source = next_hit
-            print(f"Hit {i}: {wall.name}: {next_hit} -> {dir}")
 
         return hits
+
+
+def plot_hits(hits: typing.List[Hit]):
+    for h in hits:
+        plt.scatter(h.pos[0], h.pos[1])
+        plt.plot(
+            [h.pos[0], h.parent[0]],
+            [h.pos[1], h.parent[1]],
+            marker="o",
+        )
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -398,6 +433,9 @@ if __name__ == "__main__":
     axis, pos = room.get_wall("Front").pos(0)
     lt = ListeningTriangle(room.get_wall("Front"), 0.8, 0.3, 0.65, Source())
     hits = room.trace(lt)
+    plt.scatter(lt.l_source()[0], lt.l_source()[1], marker="x", linewidth=8)
+    plt.scatter(lt.listening_pos()[0], lt.listening_pos()[1], marker="h", linewidth=12)
+    plot_hits(hits)
 
     # room.pra_room.add_source(l_speaker)
     # room.pra_room.add_microphone(critical)
