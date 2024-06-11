@@ -238,6 +238,9 @@ class ListeningTriangle:
             case Axis.Z:
                 raise RuntimeError
 
+    def additional_walls(self) -> typing.List[Wall]:
+        return []
+
     def positions(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         p = self._wall.center_pos()
         match self._axis:
@@ -289,8 +292,10 @@ class Hit:
 class Room:
 
     # TODO: probably needs to be fleshed out better
-    def __init__(self, walls: typing.List[Wall]):
+    def __init__(self, walls: typing.List[Wall], lt: ListeningTriangle):
         self.walls = walls
+        self._lt = lt
+
         mat = pra.Material(energy_absorption=0.1, scattering=0.2)
         _pra_walls = []
         for w in walls:
