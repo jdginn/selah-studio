@@ -5,6 +5,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 import pyroomacoustics as pra
 import pyroomacoustics.libroom as libroom
+import matplotlib.animation as animation
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -292,9 +293,8 @@ class Hit:
 class Room:
 
     # TODO: probably needs to be fleshed out better
-    def __init__(self, walls: typing.List[Wall], lt: ListeningTriangle):
+    def __init__(self, walls: typing.List[Wall]):
         self.walls = walls
-        self._lt = lt
 
         mat = pra.Material(energy_absorption=0.1, scattering=0.2)
         _pra_walls = []
@@ -402,15 +402,28 @@ class Room:
         return hits
 
 
-def plot_hits(hits: typing.List[Hit]):
-    for h in hits:
-        plt.scatter(h.pos[0], h.pos[1])
-        plt.plot(
-            [h.pos[0], h.parent[0]],
-            [h.pos[1], h.parent[1]],
-            marker="o",
-        )
+def animate_hits(fig, hits: typing.List[Hit]):
+
+    def plot_single_hit(frame):
+        h = hits[frame]
+        point = ax.scatter(h.pos[0], h.pos[1])
+        line = ax.plot([h.pos[0], h.parent[0]], [h.pos[1], h.parent[1]], marker="o")
+        plt.waitforbuttonpress()
+        return (point, line)
+
+    anim = animation.FuncAnimation(
+        fig=fig, func=plot_single_hit, frames=len(hits), interval=600
+    )
     plt.show()
+
+
+def manually_advance_hits(fig, hits: typing.List[Hit]):
+
+    for h in hits:
+        plt.waitforbuttonpress()
+        plt.scatter(h.pos[0], h.pos[1])
+        plt.plot([h.pos[0], h.parent[0]], [h.pos[1], h.parent[1]], marker="o")
+        plt.draw()
 
 
 if __name__ == "__main__":
@@ -438,9 +451,13 @@ if __name__ == "__main__":
     axis, pos = room.get_wall("Front").pos(0)
     lt = ListeningTriangle(room.get_wall("Front"), 0.8, 0.3, 0.65, Source())
     hits = room.trace(lt)
-    plt.scatter(lt.l_source()[0], lt.l_source()[1], marker="x", linewidth=8)
-    plt.scatter(lt.listening_pos()[0], lt.listening_pos()[1], marker="h", linewidth=12)
-    plot_hits(hits)
+
+    fig, ax = plt.subplots()
+    ax.scatter(lt.l_source()[0], lt.l_source()[1], marker="x", linewidth=8)
+    ax.scatter(lt.listening_pos()[0], lt.listening_pos()[1], marker="h", linewidth=12)
+    # animate_hits(fig, hits)
+    manually_advance_hits(fig, hits)
+    # plt.show()
 
     # room.pra_room.add_source(l_speaker)
     # room.pra_room.add_microphone(critical)
