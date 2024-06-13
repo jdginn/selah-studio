@@ -1,16 +1,14 @@
 import argparse
-from math import dist
 from dataclasses import dataclass
 import zipfile
 import xml.etree.ElementTree as ET
 import pyroomacoustics as pra
 import pyroomacoustics.libroom as libroom
 import matplotlib.animation as animation
-
+import meshcut
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
-import pprint
 import pyfqmr
 import typing
 import math
@@ -324,6 +322,18 @@ class Room:
             air_absorption=False,
         )
 
+    def listening_trinagle(
+        self,
+        wall_name: str,
+        height: float,
+        dist_from_wall: float,
+        dist_from_center: float,
+        source: Source,
+    ) -> None:
+        self._lt = ListeningTriangle(
+            self.get_wall(wall_name), height, dist_from_wall, dist_from_center, source
+        )
+
     # Stub to provide type awareness
     #
     # Also, most of what we use pra_room for is accessing the internal engine, since we wrap
@@ -338,7 +348,7 @@ class Room:
                 return w
         raise RuntimeError
 
-    def trace(self, lt: ListeningTriangle) -> typing.List[Hit]:
+    def trace(self) -> typing.List[Hit]:
         rfz_radius = 0.75
         time_thresh = 1
         speed_of_sound = 336
@@ -346,7 +356,7 @@ class Room:
         # TODO: factor in absorptive losses
 
         max_dist = self.engine.get_max_distance()
-        l_speaker, r_speaker, crit = lt.positions()
+        l_speaker, r_speaker, crit = self._lt.positions()
         # hits: typing.List[Hit] = [Hit(l_speaker, None, None)]
         hits: typing.List[Hit] = []
         total_dist = 0
@@ -401,6 +411,31 @@ class Room:
 
         return hits
 
+    def draw(self, fig, ax):
+        ax.scatter(
+            self._lt.l_source()[0], self._lt.l_source()[1], marker="x", linewidth=8
+        )
+        ax.scatter(
+            self._lt.listening_pos()[0],
+            self._lt.listening_pos()[1],
+            marker="h",
+            linewidth=12,
+        )
+
+    # # TODO: broken
+    #     verts = np.empty((0, 3))
+    #     tris = np.empty((0, 3))
+    #     for w in self.walls:
+    #         verts = np.append(verts, w.vertices, 0)
+    #         tris = np.append(tris, w.triangles, 0)
+    #     mesh = meshcut.TriangleMesh(verts, tris)
+    #     outline = meshcut.cross_section_mesh(
+    #         mesh, meshcut.Plane((0.1, 0.1, 0.25), (0, 0, 1))
+    #     )
+    #     ax.plot(outline)
+    #     IPython.embed()
+    #     plt.show()
+
 
 def animate_hits(fig, hits: typing.List[Hit]):
 
@@ -449,15 +484,13 @@ if __name__ == "__main__":
     room = Room(objects)
     print("Front")
     axis, pos = room.get_wall("Front").pos(0)
-    lt = ListeningTriangle(room.get_wall("Front"), 0.8, 0.3, 0.65, Source())
-    hits = room.trace(lt)
+    room.listening_trinagle("Front", 0.8, 0.3, 0.65, Source())
+    hits = room.trace()
 
     fig, ax = plt.subplots()
-    ax.scatter(lt.l_source()[0], lt.l_source()[1], marker="x", linewidth=8)
-    ax.scatter(lt.listening_pos()[0], lt.listening_pos()[1], marker="h", linewidth=12)
+    room.draw(fig, ax)
     # animate_hits(fig, hits)
     manually_advance_hits(fig, hits)
-    # plt.show()
 
     # room.pra_room.add_source(l_speaker)
     # room.pra_room.add_microphone(critical)
