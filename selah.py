@@ -474,19 +474,19 @@ class Room:
         )
         plt.draw()
 
-    # # TODO: broken
-    #     verts = np.empty((0, 3))
-    #     tris = np.empty((0, 3))
-    #     for w in self.walls:
-    #         verts = np.append(verts, w.vertices, 0)
-    #         tris = np.append(tris, w.triangles, 0)
-    #     mesh = meshcut.TriangleMesh(verts, tris)
-    #     outline = meshcut.cross_section_mesh(
-    #         mesh, meshcut.Plane((0.1, 0.1, 0.25), (0, 0, 1))
-    #     )
-    #     ax.plot(outline)
-    #     IPython.embed()
-    #     plt.show()
+        # TODO: broken
+        verts = np.empty((0, 3))
+        tris = np.empty((0, 3))
+        for w in self.walls:
+            verts = np.append(verts, w.vertices, 0)
+            tris = np.append(tris, w.triangles, 0)
+        mesh = meshcut.TriangleMesh(verts, tris)
+        outline = meshcut.cross_section_mesh(
+            mesh, meshcut.Plane((0.1, 0.1, 0.25), (0, 0, 1))
+        )
+        ax.plot(outline)
+        IPython.embed()
+        plt.show()
 
 
 def animate_hits(fig, hits: typing.List[Hit]):
