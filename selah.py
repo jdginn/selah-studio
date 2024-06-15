@@ -1,20 +1,20 @@
 import argparse
-from dataclasses import dataclass
-import zipfile
-import xml.etree.ElementTree as ET
-import pyroomacoustics as pra
-import pyroomacoustics.libroom as libroom
-import matplotlib.animation as animation
-import meshcut
-import matplotlib.pyplot as plt
-import numpy as np
-import numpy.typing as npt
-import pyfqmr
-import typing
 import math
+import typing
+import xml.etree.ElementTree as ET
+import zipfile
+from dataclasses import dataclass
 from enum import Enum
 
 import IPython
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
+import meshcut
+import numpy as np
+import numpy.typing as npt
+import pyfqmr
+import pyroomacoustics as pra
+import pyroomacoustics.libroom as libroom
 
 namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
 
@@ -288,6 +288,14 @@ class Hit:
     parent: np.ndarray
 
 
+@dataclass
+class Shot:
+    dir: npt.NDArray
+
+    def __hash__(self) -> int:
+        return f"x:{self.dir[0]}y:{self.dir[1]}z:{self.dir[2]}".__hash__()
+
+
 class Room:
 
     # TODO: probably needs to be fleshed out better
@@ -348,79 +356,123 @@ class Room:
                 return w
         raise RuntimeError
 
-    def trace(self) -> typing.List[Hit]:
-        rfz_radius = 0.75
-        time_thresh = 1
+    def trace(
+        self,
+        **kwargs,
+    ) -> dict[Shot, typing.List[Hit]]:
+        order = kwargs.get("order", 10)
+        max_time = kwargs.get("max_time", 0.1)
+        min_gain = kwargs.get("min_gain", -20)
+        rfz_radius = kwargs.get("rfz_radius", 0.3)
+        num_samples = kwargs.get("num_samples", 10)
+        vert_disp: float = kwargs.get("vert_disp", 40) / 360 * 2 * math.pi
+        horiz_disp: float = kwargs.get("vert_disp", 60) / 360 * 2 * math.pi
+        # TODO: kwarg source selection
+
         speed_of_sound = 336
+        max_dist = self.engine.get_max_distance()
 
         # TODO: factor in absorptive losses
 
-        max_dist = self.engine.get_max_distance()
-        l_speaker, r_speaker, crit = self._lt.positions()
-        # hits: typing.List[Hit] = [Hit(l_speaker, None, None)]
-        hits: typing.List[Hit] = []
-        total_dist = 0
-
-        norm = dir_from_points(l_speaker, crit)
-
+        l_speaker, r_speaker, listen_pos = self._lt.positions()
         source = l_speaker
-        # First compute normal of wall
-        # Then add/subtract directions from the normal based on a dispersion
-        dir = norm
-        print(f"Source: {source} -> {dir}")
+        source_normal = dir_from_points(source, listen_pos)
 
-        order = 10
-        for i in range(order):
-            temp_dist = max_dist
-            hit_dist = max_dist
-            next_hit = np.empty([3], dtype="float32")
-            wall: typing.Union[None, libroom.Wall] = None
-
-            for w in self.engine.walls:
-                temp_hit = np.empty([3], dtype="float32")
-                if w.intersection(source, source + dir * max_dist, temp_hit) > -1:
-                    temp_dist = np.linalg.norm(temp_hit - source)
-                    if temp_dist > 0.00001 and temp_dist < hit_dist:
-                        hit_dist = temp_dist
-                        next_hit = temp_hit
-                        wall = w
-
-            if wall is None:
-                raise RuntimeError
-
-            dir = dir - wall.normal * 2 * dir.dot(wall.normal)
-
-            hits.append(Hit(next_hit, wall, source))
-
-            dist_from_crit = np.linalg.norm(
-                np.cross(next_hit - source, crit - source)
-                / np.linalg.norm(next_hit - source)
+        shots: typing.List[Shot] = [Shot(source_normal)]
+        i = 1
+        for _ in range(num_samples):
+            print(f"i: {i}")
+            print(f"horiz_step: {horiz_disp / num_samples}")
+            print(f"vert_step: {vert_disp/ num_samples}")
+            # TODO: this is sampling is simply a horizontal stepping. It should probably
+            # be pseudorandom.
+            unscaled = np.array(
+                # TODO: for now this only works for sources on X-axis wall!
+                [
+                    0,
+                    -horiz_disp / num_samples * i,
+                    # -horiz_disp + horiz_disp / num_samples * i,
+                    vert_disp / num_samples * i,
+                    # -vert_disp + vert_disp / num_samples * i,
+                ]
             )
+            print(f"Unscaled {unscaled}")
+            # norm = np.linalg.norm(unscaled)
+            # scaled = unscaled / norm
+            # print(f"Scaled {scaled}")
+            # print(f"Normal {source_normal}")
+            print(f"Adjusted {source_normal + unscaled}")
+            adjusted = source_normal + unscaled
+            rescaled = adjusted / np.linalg.norm(adjusted)
+            print(f"Rescaled {rescaled}")
+            shots.append(Shot(rescaled))
+            i = i + 1
 
-            total_dist += hit_dist
-            if dist_from_crit < rfz_radius:
-                print(
-                    f"Hit {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
+        hits: typing.Dict[Shot, typing.List[Hit]] = {}
+        for shot in shots:
+            source = l_speaker
+            total_dist = 0
+
+            dir = shot.dir
+            print(f"Source: {source} -> {dir}")
+
+            temp_hits: typing.List[Hit] = []
+
+            for i in range(order):
+                temp_dist = max_dist
+                hit_dist = max_dist
+                next_hit = np.empty([3], dtype="float32")
+                wall: typing.Union[None, libroom.Wall] = None
+
+                for w in self.engine.walls:
+                    temp_hit = np.empty([3], dtype="float32")
+                    if w.intersection(source, source + dir * max_dist, temp_hit) > -1:
+                        temp_dist = np.linalg.norm(temp_hit - source)
+                        if temp_dist > 0.00001 and temp_dist < hit_dist:
+                            hit_dist = temp_dist
+                            next_hit = temp_hit
+                            wall = w
+
+                if wall is None:
+                    raise RuntimeError
+
+                dir = dir - wall.normal * 2 * dir.dot(wall.normal)
+
+                temp_hits.append(Hit(next_hit, wall, source))
+
+                dist_from_crit = np.linalg.norm(
+                    np.cross(next_hit - source, listen_pos - source)
+                    / np.linalg.norm(next_hit - source)
                 )
-            else:
-                print(f"Hit {i}: {wall.name}: {next_hit} -> {dir}")
-            if total_dist / speed_of_sound > time_thresh:
-                break
 
-            source = next_hit
+                total_dist += hit_dist
+                if dist_from_crit < rfz_radius:
+                    print(
+                        f"Hit {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
+                    )
+                    if len(temp_hits) > 1:
+                        # In the end, we only care about reflections that impact the listening position
+                        hits[shot] = temp_hits
+                else:
+                    print(f"Hit {i}: {wall.name}: {next_hit} -> {dir}")
+                if total_dist / speed_of_sound > max_time:
+                    break
+
+                source = next_hit
 
         return hits
 
     def draw(self, fig, ax):
-        ax.scatter(
+        plt.scatter(
             self._lt.l_source()[0], self._lt.l_source()[1], marker="x", linewidth=8
         )
-        ax.scatter(
+        plt.scatter(
             self._lt.listening_pos()[0],
             self._lt.listening_pos()[1],
             marker="h",
             linewidth=12,
         )
+        plt.draw()
 
     # # TODO: broken
     #     verts = np.empty((0, 3))
@@ -446,6 +498,8 @@ def animate_hits(fig, hits: typing.List[Hit]):
         plt.waitforbuttonpress()
         return (point, line)
 
+    fig.cla()
+    room.draw(fig, ax)
     anim = animation.FuncAnimation(
         fig=fig, func=plot_single_hit, frames=len(hits), interval=600
     )
@@ -454,11 +508,23 @@ def animate_hits(fig, hits: typing.List[Hit]):
 
 def manually_advance_hits(fig, hits: typing.List[Hit]):
 
+    plt.clf()
+    room.draw(fig, ax)
     for h in hits:
         plt.waitforbuttonpress()
         plt.scatter(h.pos[0], h.pos[1])
         plt.plot([h.pos[0], h.parent[0]], [h.pos[1], h.parent[1]], marker="o")
         plt.draw()
+
+
+def plot_hits(fig, shots: dict[Shot, typing.List[Hit]]):
+    room.draw(fig, ax)
+    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
+    for (shot, hits), c in zip(shots.items(), colors):
+        for h in hits:
+            plt.scatter(h.pos[0], h.pos[1], c=c)
+            plt.plot([h.pos[0], h.parent[0]], [h.pos[1], h.parent[1]], marker="o", c=c)
+    plt.draw()
 
 
 if __name__ == "__main__":
@@ -485,12 +551,17 @@ if __name__ == "__main__":
     print("Front")
     axis, pos = room.get_wall("Front").pos(0)
     room.listening_trinagle("Front", 0.8, 0.3, 0.65, Source())
-    hits = room.trace()
+    # hits = room.trace(kwargs={"vert_disp": 0})
+    hits = room.trace(num_samples=10)
 
     fig, ax = plt.subplots()
-    room.draw(fig, ax)
+    # room.draw(fig, ax)
+    # plt.show()
     # animate_hits(fig, hits)
-    manually_advance_hits(fig, hits)
+    # for shot, ray in hits.items():
+    #     manually_advance_hits(fig, ray)
+    plot_hits(fig, hits)
+    plt.show()
 
     # room.pra_room.add_source(l_speaker)
     # room.pra_room.add_microphone(critical)
