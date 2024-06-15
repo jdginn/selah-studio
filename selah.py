@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from enum import Enum
 
 import IPython
+import trimesh
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-import meshcut
 import numpy as np
 import numpy.typing as npt
 import pyfqmr
@@ -155,7 +155,7 @@ class Source:
         self.vert_disp = vert_disp
 
 
-def dir_from_points(p1, p2: npt.NDArray) -> npt.NDArray:
+def dir_from_points(p1: npt.NDArray, p2: npt.NDArray) -> npt.NDArray:
     unscaled = p2 - p1
     return unscaled / np.linalg.norm(unscaled)
 
@@ -237,7 +237,14 @@ class ListeningTriangle:
             case Axis.Z:
                 raise RuntimeError
 
-    def additional_walls(self) -> typing.List[Wall]:
+    def additional_walls(self, mesh: trimesh.Trimesh) -> typing.List[Wall]:
+        l_sec = mesh.section(
+            dir_from_points(self.l_source(), self.listening_pos()), self.l_source()
+        )
+        if l_sec is None:
+            raise RuntimeError
+        l_sec.to_planar()[0]
+        # IPython.embed()
         return []
 
     def positions(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
@@ -341,6 +348,7 @@ class Room:
         self._lt = ListeningTriangle(
             self.get_wall(wall_name), height, dist_from_wall, dist_from_center, source
         )
+        self._lt.additional_walls(self.mesh)
 
     # Stub to provide type awareness
     #
@@ -349,6 +357,15 @@ class Room:
     @property
     def engine(self) -> libroom.Room:
         return self.pra_room.room_engine
+
+    @property
+    def mesh(self) -> trimesh.Trimesh:
+        m = trimesh.util.concatenate(
+            [trimesh.Trimesh(x.vertices, x.triangles) for x in self.walls]
+        )
+        if m is None:
+            raise RuntimeError
+        return m
 
     def get_wall(self, name: str | int) -> Wall:
         for w in self.walls:
@@ -414,10 +431,12 @@ class Room:
             total_dist = 0
 
             dir = shot.dir
-            print(f"Source: {source} -> {dir}")
+            # print(f"Source: {source} -> {dir}")
 
             temp_hits: typing.List[Hit] = []
 
+            nth_total_hits = 0
+            nth_listening_pos_hits = 0
             for i in range(order):
                 temp_dist = max_dist
                 hit_dist = max_dist
@@ -428,7 +447,9 @@ class Room:
                     temp_hit = np.empty([3], dtype="float32")
                     if w.intersection(source, source + dir * max_dist, temp_hit) > -1:
                         temp_dist = np.linalg.norm(temp_hit - source)
+                        nth_total_hits += 1
                         if temp_dist > 0.00001 and temp_dist < hit_dist:
+                            nth_listening_pos_hits += 1
                             hit_dist = temp_dist
                             next_hit = temp_hit
                             wall = w
@@ -446,15 +467,12 @@ class Room:
                 )
 
                 total_dist += hit_dist
+                # In the end, we only care about reflections that impact the listening position
                 if dist_from_crit < rfz_radius:
                     print(
-                        f"Hit {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
+                        f"Reflection {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
                     )
-                    if len(temp_hits) > 1:
-                        # In the end, we only care about reflections that impact the listening position
-                        hits[shot] = temp_hits
-                # else:
-                # print(f"Hit {i}: {wall.name}: {next_hit} -> {dir}")
+                    hits[shot] = temp_hits
                 if total_dist / speed_of_sound > max_time:
                     break
 
@@ -473,8 +491,6 @@ class Room:
             linewidth=12,
         )
         plt.draw()
-
-        import trimesh
 
         # TODO: fix magic number
         outline = (
@@ -550,7 +566,7 @@ if __name__ == "__main__":
     room = Room(objects)
     room.listening_trinagle("Front", 0.8, 0.3, 0.65, Source())
     # hits = room.trace(kwargs={"vert_disp": 0})
-    hits = room.trace(num_samples=10)
+    hits = room.trace(num_samples=5, order=100)
 
     fig, ax = plt.subplots()
     # room.draw(fig, ax)
