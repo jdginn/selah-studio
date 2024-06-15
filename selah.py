@@ -238,13 +238,18 @@ class ListeningTriangle:
                 raise RuntimeError
 
     def additional_walls(self, mesh: trimesh.Trimesh) -> typing.List[Wall]:
-        l_sec = mesh.section(
-            dir_from_points(self.l_source(), self.listening_pos()), self.l_source()
+        mp = trimesh.intersections.mesh_plane(
+            mesh,
+            dir_from_points(self.l_source(), self.listening_pos()),
+            self.l_source(),
         )
-        if l_sec is None:
-            raise RuntimeError
-        l_sec.to_planar()[0]
-        # IPython.embed()
+        new_tris: typing.List[npt.NDArray] = []
+        for line in mp:
+            new_tris.append(
+                np.ndarray([line[0], line[1], self.l_source()], dtype="float32")
+            )
+        new_mesh = trimesh.Trimesh(new_tris)
+        IPython.embed()
         return []
 
     def positions(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
