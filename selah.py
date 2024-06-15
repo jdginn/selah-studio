@@ -453,8 +453,8 @@ class Room:
                     if len(temp_hits) > 1:
                         # In the end, we only care about reflections that impact the listening position
                         hits[shot] = temp_hits
-                else:
-                    print(f"Hit {i}: {wall.name}: {next_hit} -> {dir}")
+                # else:
+                # print(f"Hit {i}: {wall.name}: {next_hit} -> {dir}")
                 if total_dist / speed_of_sound > max_time:
                     break
 
@@ -474,19 +474,19 @@ class Room:
         )
         plt.draw()
 
-        # TODO: broken
-        verts = np.empty((0, 3))
-        tris = np.empty((0, 3))
-        for w in self.walls:
-            verts = np.append(verts, w.vertices, 0)
-            tris = np.append(tris, w.triangles, 0)
-        mesh = meshcut.TriangleMesh(verts, tris)
-        outline = meshcut.cross_section_mesh(
-            mesh, meshcut.Plane((0.1, 0.1, 0.25), (0, 0, 1))
+        import trimesh
+
+        # TODO: fix magic number
+        outline = (
+            trimesh.util.concatenate(
+                [trimesh.Trimesh(x.vertices, x.triangles) for x in self.walls]
+            )
+            .section((0, 0, 1), (0, 0, 0))
+            .to_planar()[0]
+            .apply_translation((1.8, 2.369))
         )
-        ax.plot(outline)
-        IPython.embed()
-        plt.show()
+        for i, points in enumerate(outline.discrete):
+            ax.plot(*points.T, color="k")
 
 
 def animate_hits(fig, hits: typing.List[Hit]):
@@ -548,8 +548,6 @@ if __name__ == "__main__":
         raise RuntimeError
     objects = [Wall(o) for o in res.findall("schema:object", namespace)]
     room = Room(objects)
-    print("Front")
-    axis, pos = room.get_wall("Front").pos(0)
     room.listening_trinagle("Front", 0.8, 0.3, 0.65, Source())
     # hits = room.trace(kwargs={"vert_disp": 0})
     hits = room.trace(num_samples=10)
