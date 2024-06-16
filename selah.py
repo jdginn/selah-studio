@@ -1,7 +1,6 @@
 import argparse
 import math
 import typing
-import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 from enum import Enum
@@ -12,7 +11,6 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
-import pyfqmr
 import pyroomacoustics as pra
 import pyroomacoustics.libroom as libroom
 
@@ -42,7 +40,6 @@ class Material:
 
 
 class Wall:
-    reduc = 1000.0
 
     #   name: string
     #   material: string
@@ -50,39 +47,10 @@ class Wall:
     #       array of vertices of shape (n_vertices, 3)
     #   faces: numpy.ndarray
     #       array of faces of shape (n_faces, 3)
-    def __init__(self, tree: ET.Element):
-        self.name = tree.get("name")
-        self._pra_walls = typing.List[pra.Wall]
-        mesh = tree.find("schema:mesh", namespace)
-        if mesh is None:
-            raise RuntimeError
-        meshv = mesh.find("schema:vertices", namespace)
-        if meshv is None:
-            raise RuntimeError
-        vertices = [v for v in meshv.iter()]
-        self.vertices = np.ndarray(shape=(len(vertices) - 1, 3))
-        for i, v in enumerate(vertices[1:]):
-            self.vertices[i] = [
-                float(v.get("x")) / self.reduc,
-                float(v.get("y")) / self.reduc,
-                float(v.get("z")) / self.reduc,
-            ]
-        mesht = mesh.find("schema:triangles", namespace)
-        if mesht is None:
-            raise RuntimeError
-        triangles = [t for t in mesht.iter()]
-        self.triangles = np.ndarray(shape=(len(triangles) - 1, 3))
-        for i, t in enumerate(triangles[1:]):
-            self.triangles[i] = [t.get("v1"), t.get("v2"), t.get("v3")]
-
-    def simplify(self):
-        # TODO: make this take the simplifier as a closure
-        simplifier = pyfqmr.Simplify()
-        simplifier.setMesh(self.vertices, self.triangles)
-        simplifier.simplify_mesh(
-            target_count=60, aggressiveness=100, preserve_border=True, verbose=10
-        )
-        self.vertices, self.triangles, _ = simplifier.getMesh()
+    def __init__(self, name: str, mesh: trimesh.Trimesh):
+        self.name = name
+        self.mesh = mesh
+        self.vertices = mesh.vertices
 
     def pos(self, height: float) -> tuple[Axis, float]:
         # For now, assume that this wall falls squarely on either the x or y axis
@@ -238,19 +206,28 @@ class ListeningTriangle:
                 raise RuntimeError
 
     def additional_walls(self, mesh: trimesh.Trimesh) -> typing.List[Wall]:
+        normal = dir_from_points(self.l_source(), self.listening_pos())
         mp = trimesh.intersections.mesh_plane(
             mesh,
-            dir_from_points(self.l_source(), self.listening_pos()),
+            normal,
             self.l_source(),
         )
-        new_tris: typing.List[npt.NDArray] = []
+        vertices: typing.List[npt.NDArray] = [self.l_source()]
+        faces: typing.List[npt.NDArray] = []
         for line in mp:
-            new_tris.append(
-                np.ndarray([line[0], line[1], self.l_source()], dtype="float32")
-            )
-        new_mesh = trimesh.Trimesh(new_tris)
-        IPython.embed()
-        return []
+            vertices.append(line[0])
+            vertices.append(line[1])
+            if len(vertices) > 3:
+                faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
+            faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
+        mesh = trimesh.Trimesh(
+            vertices=vertices, faces=faces, process=True, validate=True
+        )
+        s = mesh.section((0, 0, 1), (0, 0, 0))
+        l_wall = Wall(
+            "Left Speaker Wall", trimesh.Trimesh(vertices=vertices, faces=faces)
+        )
+        return [l_wall]
 
     def positions(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         p = self._wall.center_pos()
@@ -318,17 +295,9 @@ class Room:
         _pra_walls = []
         for w in walls:
             # w.simplify()
-            for tri in w.triangles:
-                corner = np.array(
-                    [
-                        w.vertices[int(tri[0])],
-                        w.vertices[int(tri[1])],
-                        w.vertices[int(tri[2])],
-                    ],
-                    dtype=np.float32,
-                )
+            for tri in w.mesh.triangles:
                 pw = pra.Wall(
-                    corner.T,
+                    tri.T,
                     mat.energy_absorption["coeffs"],
                     mat.scattering["coeffs"],
                 )
@@ -342,7 +311,7 @@ class Room:
             air_absorption=False,
         )
 
-    def listening_trinagle(
+    def listening_triangle(
         self,
         wall_name: str,
         height: float,
@@ -353,7 +322,7 @@ class Room:
         self._lt = ListeningTriangle(
             self.get_wall(wall_name), height, dist_from_wall, dist_from_center, source
         )
-        self._lt.additional_walls(self.mesh)
+        self.walls = self.walls + self._lt.additional_walls(self.mesh)
 
     # Stub to provide type awareness
     #
@@ -365,10 +334,8 @@ class Room:
 
     @property
     def mesh(self) -> trimesh.Trimesh:
-        m = trimesh.util.concatenate(
-            [trimesh.Trimesh(x.vertices, x.triangles) for x in self.walls]
-        )
-        if m is None:
+        m = trimesh.util.concatenate([x.mesh for x in self.walls])
+        if not isinstance(m, trimesh.Trimesh):
             raise RuntimeError
         return m
 
@@ -497,17 +464,13 @@ class Room:
         )
         plt.draw()
 
+        # self.mesh.show()
         # TODO: fix magic number
-        outline = (
-            trimesh.util.concatenate(
-                [trimesh.Trimesh(x.vertices, x.triangles) for x in self.walls]
-            )
-            .section((0, 0, 1), (0, 0, 0))
-            .to_planar()[0]
-            .apply_translation((1.8, 2.369))
-        )
-        for i, points in enumerate(outline.discrete):
-            ax.plot(*points.T, color="k")
+        sec = self.mesh.section((0, 0, 1), (0, 0, 0.5))
+        if sec is None:
+            raise RuntimeError
+        outline = sec.to_planar()[0].apply_translation((1.8, 2.369))
+        outline.plot_entities()
 
 
 def animate_hits(fig, hits: typing.List[Hit]):
@@ -561,15 +524,11 @@ if __name__ == "__main__":
 
     # IPython.embed()
 
-    z = zipfile.ZipFile(args.file)
-    f = z.extract("3D/3dmodel.model")
-    tree = ET.parse(f)
-    res = tree.getroot().find("schema:resources", namespace)
-    if res is None:
+    scene = trimesh.load(args.file).scaled(1 / 1000)
+    if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
-    objects = [Wall(o) for o in res.findall("schema:object", namespace)]
-    room = Room(objects)
-    room.listening_trinagle("Front", 0.8, 0.3, 0.65, Source())
+    room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
+    room.listening_triangle("Front", 0.8, 0.3, 0.65, Source())
     # hits = room.trace(kwargs={"vert_disp": 0})
     hits = room.trace(num_samples=5, order=100)
 
