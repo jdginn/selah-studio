@@ -322,7 +322,7 @@ class Room:
         self._lt = ListeningTriangle(
             self.get_wall(wall_name), height, dist_from_wall, dist_from_center, source
         )
-        self.walls = self.walls + self._lt.additional_walls(self.mesh)
+        # self.walls = self.walls + self._lt.additional_walls(self.mesh)
 
     # Stub to provide type awareness
     #
@@ -337,6 +337,8 @@ class Room:
         m = trimesh.util.concatenate([x.mesh for x in self.walls])
         if not isinstance(m, trimesh.Trimesh):
             raise RuntimeError
+        m.fix_normals(True)
+        m.invert()
         return m
 
     def get_wall(self, name: str | int) -> Wall:
@@ -409,29 +411,53 @@ class Room:
 
             nth_total_hits = 0
             nth_listening_pos_hits = 0
+            mesh = self.mesh
+            mesh.fix_normals()
+            mesh.invert()
+            intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
             for i in range(order):
                 temp_dist = max_dist
                 hit_dist = max_dist
                 next_hit = np.empty([3], dtype="float32")
                 wall: typing.Union[None, libroom.Wall] = None
 
-                for w in self.engine.walls:
-                    temp_hit = np.empty([3], dtype="float32")
-                    if w.intersection(source, source + dir * max_dist, temp_hit) > -1:
-                        temp_dist = np.linalg.norm(temp_hit - source)
-                        nth_total_hits += 1
-                        if temp_dist > 0.00001 and temp_dist < hit_dist:
-                            nth_listening_pos_hits += 1
-                            hit_dist = temp_dist
-                            next_hit = temp_hit
-                            wall = w
+                # loc, _, face_idx = intersector.intersects_location([source], [dir])
+                face_idx, _, loc = intersector.intersects_id(
+                    [source], [dir], return_locations=True
+                )
+                norm = mesh.face_normals[face_idx[0]]
+                print(f"loc: {loc}, face_idx: {face_idx}, norm: {norm}")
 
-                if wall is None:
-                    raise RuntimeError
+                if len(loc) == 0:
+                    break
+                temp_hit = loc[0]
+                temp_dist = np.linalg.norm(temp_hit - source)
+                nth_total_hits += 1
+                if temp_dist > 0.0001 and temp_dist < hit_dist:
+                    nth_listening_pos_hits += 1
+                    hit_dist = temp_dist
+                    next_hit = temp_hit
+                norm = mesh.face_normals[face_idx[0]]
 
-                dir = dir - wall.normal * 2 * dir.dot(wall.normal)
+                dir = dir - norm * 2 * dir.dot(norm)
 
-                temp_hits.append(Hit(next_hit, wall, source))
+                # IPython.embed()
+                #
+                # for w in self.engine.walls:
+                #     temp_hit = np.empty([3], dtype="float32")
+                #     if w.intersection(source, source + dir * max_dist, temp_hit) > -1:
+                #         temp_dist = np.linalg.norm(temp_hit - source)
+                #         nth_total_hits += 1
+                #         if temp_dist > 0.00001 and temp_dist < hit_dist:
+                #             nth_listening_pos_hits += 1
+                #             hit_dist = temp_dist
+                #             next_hit = temp_hit
+                #             wall = w
+                #
+                # if wall is None:
+                #     raise RuntimeError
+
+                temp_hits.append(Hit(next_hit, None, source))
 
                 dist_from_crit = np.linalg.norm(
                     np.cross(next_hit - source, listen_pos - source)
@@ -442,7 +468,8 @@ class Room:
                 # In the end, we only care about reflections that impact the listening position
                 if dist_from_crit < rfz_radius:
                     print(
-                        f"Reflection {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
+                        # f"Reflection {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
+                        f"Reflection {i}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
                     )
                     hits[shot] = temp_hits
                 if total_dist / speed_of_sound > max_time:
@@ -490,15 +517,16 @@ def animate_hits(fig, hits: typing.List[Hit]):
     plt.show()
 
 
-def manually_advance_hits(fig, hits: typing.List[Hit]):
+def manually_advance_hits(fig, hits: typing.List[typing.List[Hit]]):
 
     plt.clf()
     room.draw(fig, ax)
-    for h in hits:
-        plt.waitforbuttonpress()
-        plt.scatter(h.pos[0], h.pos[1])
-        plt.plot([h.pos[0], h.parent[0]], [h.pos[1], h.parent[1]], marker="o")
-        plt.draw()
+    for _, hh in hits.items():
+        for h in hh:
+            plt.waitforbuttonpress()
+            plt.scatter(h.pos[0], h.pos[1])
+            plt.plot([h.pos[0], h.parent[0]], [h.pos[1], h.parent[1]], marker="o")
+            plt.draw()
 
 
 def plot_hits(fig, shots: dict[Shot, typing.List[Hit]]):
@@ -530,7 +558,7 @@ if __name__ == "__main__":
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
     room.listening_triangle("Front", 0.8, 0.3, 0.65, Source())
     # hits = room.trace(kwargs={"vert_disp": 0})
-    hits = room.trace(num_samples=5, order=100)
+    hits = room.trace(num_samples=20, order=100)
 
     fig, ax = plt.subplots()
     # room.draw(fig, ax)
@@ -538,8 +566,9 @@ if __name__ == "__main__":
     # animate_hits(fig, hits)
     # for shot, ray in hits.items():
     #     manually_advance_hits(fig, ray)
-    plot_hits(fig, hits)
-    plt.show()
+    manually_advance_hits(fig, hits)
+    # plot_hits(fig, hits)
+    # plt.show()
 
     # room.pra_room.add_source(l_speaker)
     # room.pra_room.add_microphone(critical)
