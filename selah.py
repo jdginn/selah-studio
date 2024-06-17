@@ -421,25 +421,28 @@ class Room:
                 next_hit = np.empty([3], dtype="float32")
                 wall: typing.Union[None, libroom.Wall] = None
 
-                # loc, _, face_idx = intersector.intersects_location([source], [dir])
-                face_idx, _, loc = intersector.intersects_id(
-                    [source], [dir], return_locations=True
-                )
-                norm = mesh.face_normals[face_idx[0]]
-                print(f"loc: {loc}, face_idx: {face_idx}, norm: {norm}")
+                for w in self.walls:
+                    intersector = trimesh.ray.ray_triangle.RayMeshIntersector(w.mesh)
+                    face_idx, _, loc = intersector.intersects_id(
+                        [source], [dir], return_locations=True
+                    )
+                    norm = mesh.face_normals[face_idx[0]]
+                    print(f"loc: {loc}, face_idx: {face_idx}, norm: {norm}")
 
-                if len(loc) == 0:
-                    break
-                temp_hit = loc[0]
-                temp_dist = np.linalg.norm(temp_hit - source)
-                nth_total_hits += 1
-                if temp_dist > 0.0001 and temp_dist < hit_dist:
-                    nth_listening_pos_hits += 1
-                    hit_dist = temp_dist
-                    next_hit = temp_hit
-                norm = mesh.face_normals[face_idx[0]]
+                    if len(loc) == 0:
+                        break
+                    temp_hit = loc[0]
+                    temp_dist = np.linalg.norm(temp_hit - source)
+                    nth_total_hits += 1
+                    if temp_dist > 0.0001 and temp_dist < hit_dist:
+                        nth_listening_pos_hits += 1
+                        hit_dist = temp_dist
+                        next_hit = temp_hit
+                    norm = mesh.face_normals[face_idx[0]]
 
-                dir = dir - norm * 2 * dir.dot(norm)
+                    dir = dir - norm * 2 * dir.dot(norm)
+                if wall is None:
+                    raise RuntimeError
 
                 # IPython.embed()
                 #
@@ -454,10 +457,8 @@ class Room:
                 #             next_hit = temp_hit
                 #             wall = w
                 #
-                # if wall is None:
-                #     raise RuntimeError
 
-                temp_hits.append(Hit(next_hit, None, source))
+                temp_hits.append(Hit(next_hit, wall, source))
 
                 dist_from_crit = np.linalg.norm(
                     np.cross(next_hit - source, listen_pos - source)
@@ -468,8 +469,8 @@ class Room:
                 # In the end, we only care about reflections that impact the listening position
                 if dist_from_crit < rfz_radius:
                     print(
-                        # f"Reflection {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
-                        f"Reflection {i}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
+                        f"Reflection {i}: {wall.name}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
+                        # f"Reflection {i}: {next_hit} -> {dir}   AUDIBLE at {total_dist / speed_of_sound * 1000:.2f}ms"
                     )
                     hits[shot] = temp_hits
                 if total_dist / speed_of_sound > max_time:
