@@ -423,13 +423,15 @@ class Room:
                 found = False
 
                 def min_norm(e):
-                    return np.linalg.norm(source - e)
+                    return np.linalg.norm(source - e[0])
 
-                for i, _ in enumerate(sorted(loc.tolist(), key=min_norm, reverse=True)):
+                for this_loc, tri_idx in sorted(
+                    zip(loc.tolist(), idx_tri.tolist()), key=min_norm, reverse=True
+                ):
                     # Check here for multiple hits
-                    if np.linalg.norm(source - loc[i]) > 0.001:
-                        new_source = loc[i]
-                        norm = mesh.face_normals[idx_tri[i]]
+                    if np.linalg.norm(source - this_loc) > 0.001:
+                        new_source = this_loc
+                        norm = mesh.face_normals[tri_idx]
                         found = True
                         break
                 if not found:
