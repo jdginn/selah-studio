@@ -206,28 +206,30 @@ class ListeningTriangle:
                 raise RuntimeError
 
     def additional_walls(self, mesh: trimesh.Trimesh) -> typing.List[Wall]:
-        normal = dir_from_points(self.l_source(), self.listening_pos())
-        mp = trimesh.intersections.mesh_plane(
-            mesh,
-            normal,
-            self.l_source(),
-        )
-        vertices: typing.List[npt.NDArray] = [self.l_source()]
-        faces: typing.List[npt.NDArray] = []
-        for line in mp:
-            vertices.append(line[0])
-            vertices.append(line[1])
-            if len(vertices) > 3:
-                faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
-            faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
-        mesh = trimesh.Trimesh(
-            vertices=vertices, faces=faces, process=True, validate=True
-        )
-        s = mesh.section((0, 0, 1), (0, 0, 0))
-        l_wall = Wall(
-            "Left Speaker Wall", trimesh.Trimesh(vertices=vertices, faces=faces)
-        )
-        return [l_wall]
+        def build_wall_from_point(name: str, point: npt.NDArray) -> Wall:
+            normal = dir_from_points(point, self.listening_pos())
+            mp = trimesh.intersections.mesh_plane(
+                mesh,
+                normal,
+                point,
+            )
+            vertices: typing.List[npt.NDArray] = [point]
+            faces: typing.List[npt.NDArray] = []
+            for line in mp:
+                vertices.append(line[0])
+                vertices.append(line[1])
+                if len(vertices) > 3:
+                    faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
+                faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
+            l_wall = Wall(
+                "Left Speaker Wall", trimesh.Trimesh(vertices=vertices, faces=faces)
+            )
+            return l_wall
+
+        return [
+            build_wall_from_point("left speaker wall", self.l_source()),
+            build_wall_from_point("right speaker wall", self.r_source()),
+        ]
 
     def positions(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         p = self._wall.center_pos()
