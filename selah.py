@@ -426,10 +426,11 @@ class Room:
                     return np.linalg.norm(source - e[0])
 
                 for this_loc, tri_idx in sorted(
-                    zip(loc.tolist(), idx_tri.tolist()), key=min_norm, reverse=True
+                    zip(loc, idx_tri), key=min_norm, reverse=False
                 ):
                     # Check here for multiple hits
                     if np.linalg.norm(source - this_loc) > 0.001:
+                        print(f"Trying {this_loc}")
                         new_source = this_loc
                         norm = mesh.face_normals[tri_idx]
                         found = True
@@ -535,7 +536,7 @@ if __name__ == "__main__":
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
     room.listening_triangle("Front", 0.8, 0.3, 0.65, Source())
     # hits = room.trace(kwargs={"vert_disp": 0})
-    hits = room.trace(num_samples=0, order=8)
+    hits = room.trace(num_samples=0, order=15)
 
     fig, ax = plt.subplots()
     # room.draw(fig, ax)
