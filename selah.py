@@ -338,7 +338,6 @@ class Room:
         if not isinstance(m, trimesh.Trimesh):
             raise RuntimeError
         m.fix_normals(True)
-        m.invert()
         return m
 
     def get_wall(self, name: str | int) -> Wall:
@@ -422,7 +421,12 @@ class Room:
                 if len(loc) == 0:
                     raise RuntimeError
                 found = False
-                for i, _ in enumerate(loc):
+
+                def min_norm(e):
+                    return np.linalg.norm(source - e)
+
+                for i, _ in enumerate(sorted(loc.tolist(), key=min_norm, reverse=True)):
+                    # Check here for multiple hits
                     if np.linalg.norm(source - loc[i]) > 0.001:
                         new_source = loc[i]
                         norm = mesh.face_normals[idx_tri[i]]
@@ -431,7 +435,8 @@ class Room:
                 if not found:
                     raise RuntimeError
                 new_dir = dir - norm * 2 * dir.dot(norm)
-                print(f"source: {source}, loc: {new_source}, norm:{norm}")
+                # print(f"source: {source}, loc: {new_source}, norm:{norm}")
+                print(f"source: {source}, locs: {loc}, norm:{norm}")
                 # print(
                 #     f"source: {source}, incident: {dir}, hit: {new_source}, reflection: {new_dir}"
                 # )
@@ -459,8 +464,6 @@ class Room:
         if sec is None:
             raise RuntimeError
         outline = sec.to_planar()[0]
-        shift = [outline.bounds[0][0], 0, 0]
-        print(f"bounds: {outline.bounds}")
         # IPython.embed()
         outline.apply_translation((-outline.bounds[0][0], -outline.bounds[0][1]))
         outline.plot_entities()
