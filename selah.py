@@ -404,16 +404,16 @@ class Room:
         mesh = self.mesh
         intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
         for j, shot in enumerate(shots):
-            hits.append([])
+            temp_hits: typing.List[Hit] = []
             source = l_speaker
             total_dist = 0
+            reflected_to_rfz = False
 
             dir = shot.dir
             for i in range(order):
                 norm: npt.NDArray = np.empty(3)
                 new_dir: npt.NDArray = np.empty(3)
                 new_source: npt.NDArray = np.empty(3)
-                # print(f"source: {source}, dir: {dir}")
                 idx_tri, idx_ray, loc = intersector.intersects_id(
                     [source],
                     [dir],
@@ -432,7 +432,6 @@ class Room:
                 ):
                     # Check here for multiple hits
                     if np.linalg.norm(source - this_loc) > 0.001:
-                        print(f"Trying {this_loc}")
                         new_source = this_loc
                         norm = mesh.face_normals[tri_idx]
                         found = True
@@ -440,14 +439,28 @@ class Room:
                 if not found:
                     raise RuntimeError
                 new_dir = dir - norm * 2 * dir.dot(norm)
-                # print(f"source: {source}, loc: {new_source}, norm:{norm}")
-                print(f"source: {source}, locs: {loc}, norm:{norm}")
-                # print(
-                #     f"source: {source}, incident: {dir}, hit: {new_source}, reflection: {new_dir}"
-                # )
-                hits[j].append(Hit(new_source, None, source))
+
+                # Check whether this reflection passes within the RFZ
+                dist_from_crit = np.linalg.norm(
+                    np.cross(new_source - source, listen_pos - source)
+                    / np.linalg.norm(new_source - source)
+                )
+                if dist_from_crit < rfz_radius:
+                    # We only care about rays that reflect to the RFZ
+                    reflected_to_rfz = True
+                    print(
+                        f"Reflection {source}->{new_source} at {total_dist / speed_of_sound * 1000:.2f}ms"
+                    )
+
+                temp_hits.append(Hit(new_source, None, source))
+                total_dist = total_dist + np.linalg.norm(new_source - source)
                 dir = new_dir
                 source = new_source
+                # Only check out to some number of ms
+                if total_dist / speed_of_sound > max_time:
+                    if reflected_to_rfz:
+                        hits.append(temp_hits)
+                    break
 
         return hits
 
@@ -491,14 +504,15 @@ def animate_hits(fig, hits: typing.List[Hit]):
     plt.show()
 
 
-def manually_advance_hits(fig, hits: typing.List[typing.List[Hit]]):
+def plot_hits(fig, hits: typing.List[typing.List[Hit]], manually_advance=False):
 
     plt.clf()
     room.draw(fig, ax)
-    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
+    colors = ["b", "g", "r", "y", "c", "m", "y", "k", "b", "g", "p", "c"]
     for i, hh in enumerate(hits):
         for h in hh:
-            plt.waitforbuttonpress()
+            if manually_advance:
+                plt.waitforbuttonpress()
             plt.scatter(h.pos[0], h.pos[1])
             plt.plot(
                 [h.pos[0], h.parent[0]],
@@ -507,16 +521,6 @@ def manually_advance_hits(fig, hits: typing.List[typing.List[Hit]]):
                 color=colors[i],
             )
             plt.draw()
-
-
-def plot_hits(fig, shots: dict[Shot, typing.List[Hit]]):
-    room.draw(fig, ax)
-    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
-    for (shot, hits), c in zip(shots.items(), colors):
-        for h in hits:
-            plt.scatter(h.pos[0], h.pos[1], c=c)
-            plt.plot([h.pos[0], h.parent[0]], [h.pos[1], h.parent[1]], marker="o", c=c)
-    plt.draw()
 
 
 if __name__ == "__main__":
@@ -536,17 +540,18 @@ if __name__ == "__main__":
     if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
-    room.listening_triangle("Front", 0.8, 0.3, 0.65, Source())
+    room.listening_triangle("Front", 0.8, 0.3, 1.5, Source(vert_disp=10, horiz_disp=10))
     # hits = room.trace(kwargs={"vert_disp": 0})
-    hits = room.trace(num_samples=0, order=15)
+    hits = room.trace(
+        num_samples=10,
+        max_time=0.1,
+        order=50,
+        rfz_radius=0.8,
+    )
 
     fig, ax = plt.subplots()
-    # room.draw(fig, ax)
-    # plt.show()
-    # animate_hits(fig, hits)
-    # for shot, ray in hits.items():
-    #     manually_advance_hits(fig, ray)
-    manually_advance_hits(fig, hits)
+    plot_hits(fig, hits, manually_advance=False)
+    plt.show()
     # plot_hits(fig, hits)
     # plt.show()
 
