@@ -322,7 +322,7 @@ class Room:
         self._lt = ListeningTriangle(
             self.get_wall(wall_name), height, dist_from_wall, dist_from_center, source
         )
-        # self.walls = self.walls + self._lt.additional_walls(self.mesh)
+        self.walls = self.walls + self._lt.additional_walls(self.mesh)
 
     # Stub to provide type awareness
     #
