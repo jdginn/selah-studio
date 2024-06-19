@@ -404,24 +404,25 @@ class Room:
         source_normal = dir_from_points(source, listen_pos)
 
         shots: typing.List[Shot] = [Shot(source_normal)]
-        i = 1
-        for _ in range(num_samples):
+        h_steps = int(math.floor(math.sqrt(num_samples)))
+        h_step_size = 2 * horiz_disp / h_steps
+        v_steps = num_samples // h_steps
+        v_step_size = 2 * vert_disp / v_steps
+        for v in range(v_steps):
             # TODO: this is sampling is simply a horizontal stepping. It should probably
             # be pseudorandom.
-            unscaled = np.array(
-                # TODO: for now this only works for sources on X-axis wall!
-                [
-                    0,
-                    -horiz_disp / num_samples * i,
-                    # -horiz_disp + horiz_disp / num_samples * i,
-                    vert_disp / num_samples * i,
-                    # -vert_disp + vert_disp / num_samples * i,
-                ]
-            )
-            adjusted = source_normal + unscaled
-            rescaled = adjusted / np.linalg.norm(adjusted)
-            shots.append(Shot(rescaled))
-            i = i + 1
+            for h in range(h_steps):
+                unscaled = np.array(
+                    # TODO: for now this only works for sources on X-axis wall!
+                    [
+                        0,
+                        -horiz_disp + h_step_size * h,
+                        -vert_disp + v_step_size * v,
+                    ]
+                )
+                adjusted = source_normal + unscaled
+                rescaled = adjusted / np.linalg.norm(adjusted)
+                shots.append(Shot(rescaled))
 
         hits: typing.List[typing.List[Hit]] = []
         intersector = trimesh.ray.ray_triangle.RayMeshIntersector(self.mesh)
@@ -578,7 +579,7 @@ if __name__ == "__main__":
         num_samples=50,
         max_time=0.2,
         min_gain=-10,
-        order=50,
+        order=5,
         rfz_radius=0.5,
         horiz_disp=60,
         vert_disp=50,
