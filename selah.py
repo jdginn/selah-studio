@@ -7,6 +7,7 @@ from enum import Enum
 
 import IPython
 import trimesh
+import trimesh.path.entities as tme
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
@@ -516,10 +517,20 @@ class Room:
         outline.apply_translation((-outline.bounds[0][0], -outline.bounds[0][1]))
         outline.plot_entities()
 
-    def plot_hits(hits: typing.List[typing.List[Hit]]):
-        import itertools
+    def plot_hits(self, hits: typing.List[typing.List[Hit]]):
+        sc = trimesh.Scene(self.mesh)
+        points: typing.List[npt.NDArray] = []
+        paths: typing.List[trimesh.path.Path3D] = []
+        for hh in hits:
+            for h in hh:
+                points.append(h.pos)
+                p = trimesh.load_path([h.parent, h.pos])
+                sc.add_geometry(p)
+                # paths.append(trimesh.path.Path3D([tme.Line([h.parent, h.pos])]))
 
-        pc = trimesh.PointCloud(itertools.chain(hits))
+        # pc = trimesh.PointCloud(points)
+        # sc.add_geometry(pc)
+        sc.show()
 
 
 def animate_hits(fig, hits: typing.List[Hit]):
@@ -576,10 +587,10 @@ if __name__ == "__main__":
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
     room.listening_triangle("Front", 0.8, 0.3, 1.5, Source(vert_disp=5, horiz_disp=5))
     hits = room.trace(
-        num_samples=50,
-        max_time=0.2,
+        num_samples=1,
+        max_time=0.1,
         min_gain=-10,
-        order=5,
+        order=50,
         rfz_radius=0.5,
         horiz_disp=60,
         vert_disp=50,
@@ -587,5 +598,6 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots()
     plot_hits(fig, hits, manually_advance=False)
-    [print(f"{x.name}: {x.abs}") for x in room.walls]
+    # room.plot_hits(hits)
+    plot_hits(room.mesh, hits)
     plt.show()
