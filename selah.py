@@ -51,6 +51,7 @@ class Wall:
         self.name = name
         self.mesh = mesh
         self.vertices = mesh.vertices
+        self._intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
 
     def pos(self, height: float) -> tuple[Axis, float]:
         # For now, assume that this wall falls squarely on either the x or y axis
@@ -342,6 +343,13 @@ class Room:
         m.fix_normals(True)
         return m
 
+    def faces_to_wall(self, idx: int) -> Wall:
+        faces_to_wall: typing.List[Wall] = []
+        for w in self.walls:
+            for _ in w.mesh.faces:
+                faces_to_wall.append(w)
+        return faces_to_wall[idx]
+
     def get_wall(self, name: str | int) -> Wall:
         for w in self.walls:
             if w.name == name:
@@ -401,8 +409,7 @@ class Room:
             i = i + 1
 
         hits: typing.List[typing.List[Hit]] = []
-        mesh = self.mesh
-        intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
+        intersector = trimesh.ray.ray_triangle.RayMeshIntersector(self.mesh)
         for j, shot in enumerate(shots):
             temp_hits: typing.List[Hit] = []
             source = l_speaker
@@ -414,6 +421,7 @@ class Room:
                 norm: npt.NDArray = np.empty(3)
                 new_dir: npt.NDArray = np.empty(3)
                 new_source: npt.NDArray = np.empty(3)
+
                 idx_tri, idx_ray, loc = intersector.intersects_id(
                     [source],
                     [dir],
@@ -433,7 +441,8 @@ class Room:
                     # Check here for multiple hits
                     if np.linalg.norm(source - this_loc) > 0.001:
                         new_source = this_loc
-                        norm = mesh.face_normals[tri_idx]
+                        norm = self.mesh.face_normals[tri_idx]
+                        wall = self.faces_to_wall(tri_idx)
                         found = True
                         break
                 if not found:
@@ -449,7 +458,7 @@ class Room:
                     # We only care about rays that reflect to the RFZ
                     reflected_to_rfz = True
                     print(
-                        f"Reflection {source}->{new_source} at {total_dist / speed_of_sound * 1000:.2f}ms"
+                        f"Reflection from {wall.name}: {source}->{new_source} at {total_dist / speed_of_sound * 1000:.2f}ms"
                     )
 
                 temp_hits.append(Hit(new_source, None, source))
@@ -474,6 +483,7 @@ class Room:
             marker="h",
             linewidth=12,
         )
+
         plt.draw()
 
         # self.mesh.show()
@@ -482,9 +492,13 @@ class Room:
         if sec is None:
             raise RuntimeError
         outline = sec.to_planar()[0]
-        # IPython.embed()
         outline.apply_translation((-outline.bounds[0][0], -outline.bounds[0][1]))
         outline.plot_entities()
+
+    def plot_hits(hits: typing.List[typing.List[Hit]]):
+        import itertools
+
+        pc = trimesh.PointCloud(itertools.chain(hits))
 
 
 def animate_hits(fig, hits: typing.List[Hit]):
@@ -534,49 +548,18 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # IPython.embed()
-
     scene = trimesh.load(args.file).scaled(1 / 1000)
     if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
     room.listening_triangle("Front", 0.8, 0.3, 1.5, Source(vert_disp=10, horiz_disp=10))
-    # hits = room.trace(kwargs={"vert_disp": 0})
     hits = room.trace(
-        num_samples=10,
+        num_samples=1,
         max_time=0.1,
         order=50,
         rfz_radius=0.8,
     )
 
     fig, ax = plt.subplots()
-    plot_hits(fig, hits, manually_advance=False)
+    plot_hits(fig, hits, manually_advance=True)
     plt.show()
-    # plot_hits(fig, hits)
-    # plt.show()
-
-    # room.pra_room.add_source(l_speaker)
-    # room.pra_room.add_microphone(critical)
-
-    # # compute the rir
-    # # room.pra_room.image_source_model()
-    # room.pra_room.ray_tracing()
-    # room.pra_room.compute_rir()
-    # # for s in room.pra_room.sources:
-    # #     s.set_ordering("order")
-    # #     for i in s.images:
-    # #         print("image:")
-    # #         print(i)
-    # room.pra_room.plot_rir()
-    # plt.xlim(0, 60)
-    # plt.savefig("imgs/stl_rir_plot.png")
-    # plt.show()
-
-    # show the room
-    # room.pra_room.plot(img_order=0, mic_marker_size=0, figsize=(10, 10))
-    # for hit in hits:
-    #     plt.scatter(hit.pos[0], hit.pos[1], hit.pos[2], c=30)
-    # plt.ylim(0, 6)
-    # plt.xlim(0, 6)
-    # plt.savefig("imgs/stl_room.png")
-    # plt.show()
