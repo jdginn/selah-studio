@@ -24,10 +24,28 @@ namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/0
 # }
 
 
+def db(gain: float) -> float:
+    return 10 * math.log10(gain)
+
+
 class Axis(Enum):
     X = 1
     Y = 2
     Z = 3
+
+
+material_abs = {"brick": 0.04, "gypsum": 0.05, "diffuser": 0.9, "wood": 0.1}
+
+wall_materials = {
+    "Default": "gypsum",
+    "Ceiling": "brick",
+    "Floor": "wood",
+    "Street": "brick",
+    "Doorway": "brick",
+    "Front": "gypsum",
+    "Cutout": "diffuser",
+    "Back": "brick",
+}
 
 
 class Material:
@@ -51,7 +69,13 @@ class Wall:
         self.name = name
         self.mesh = mesh
         self.vertices = mesh.vertices
-        self._intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
+        self.abs = material_abs[
+            wall_materials.get(self.name, wall_materials["Default"])
+        ]
+        # if self.name not in wall_materials:
+        #     self.abs = material_abs[wall_materials["Default"]]
+        # else:
+        #     self.abs = material_abs[wall_materials[self.name]]
 
     def pos(self, height: float) -> tuple[Axis, float]:
         # For now, assume that this wall falls squarely on either the x or y axis
@@ -276,8 +300,9 @@ class ListeningTriangle:
 @dataclass
 class Hit:
     pos: np.ndarray
-    wall: Wall
+    wall: typing.Union[Wall, None]
     parent: np.ndarray
+    intensity: float
 
 
 @dataclass
@@ -365,8 +390,8 @@ class Room:
         min_gain = kwargs.get("min_gain", -20)
         rfz_radius = kwargs.get("rfz_radius", 0.3)
         num_samples = kwargs.get("num_samples", 10)
-        vert_disp: float = kwargs.get("vert_disp", 40) / 360 * 2 * math.pi
-        horiz_disp: float = kwargs.get("vert_disp", 60) / 360 * 2 * math.pi
+        vert_disp: float = kwargs.get("vert_disp", 50) / 360 * 2 * math.pi
+        horiz_disp: float = kwargs.get("horiz_disp", 60) / 360 * 2 * math.pi
         # TODO: kwarg source selection
 
         speed_of_sound = 336
@@ -381,9 +406,6 @@ class Room:
         shots: typing.List[Shot] = [Shot(source_normal)]
         i = 1
         for _ in range(num_samples):
-            print(f"i: {i}")
-            print(f"horiz_step: {horiz_disp / num_samples}")
-            print(f"vert_step: {vert_disp/ num_samples}")
             # TODO: this is sampling is simply a horizontal stepping. It should probably
             # be pseudorandom.
             unscaled = np.array(
@@ -396,15 +418,8 @@ class Room:
                     # -vert_disp + vert_disp / num_samples * i,
                 ]
             )
-            print(f"Unscaled {unscaled}")
-            # norm = np.linalg.norm(unscaled)
-            # scaled = unscaled / norm
-            # print(f"Scaled {scaled}")
-            # print(f"Normal {source_normal}")
-            print(f"Adjusted {source_normal + unscaled}")
             adjusted = source_normal + unscaled
             rescaled = adjusted / np.linalg.norm(adjusted)
-            print(f"Rescaled {rescaled}")
             shots.append(Shot(rescaled))
             i = i + 1
 
@@ -415,6 +430,8 @@ class Room:
             source = l_speaker
             total_dist = 0
             reflected_to_rfz = False
+            intensity = 1
+            wall: typing.Union[Wall, None] = None
 
             dir = shot.dir
             for i in range(order):
@@ -443,6 +460,7 @@ class Room:
                         new_source = this_loc
                         norm = self.mesh.face_normals[tri_idx]
                         wall = self.faces_to_wall(tri_idx)
+                        intensity = intensity * (1 - wall.abs)
                         found = True
                         break
                 if not found:
@@ -454,22 +472,24 @@ class Room:
                     np.cross(new_source - source, listen_pos - source)
                     / np.linalg.norm(new_source - source)
                 )
-                if dist_from_crit < rfz_radius:
+                if dist_from_crit < rfz_radius and i > 1:
                     # We only care about rays that reflect to the RFZ
                     reflected_to_rfz = True
                     print(
-                        f"Reflection from {wall.name}: {source}->{new_source} at {total_dist / speed_of_sound * 1000:.2f}ms"
+                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist / speed_of_sound * 1000:.2f}ms"
                     )
+                if total_dist / speed_of_sound > max_time:
+                    break
+                if db(intensity) < min_gain:
+                    break
 
-                temp_hits.append(Hit(new_source, None, source))
+                temp_hits.append(Hit(new_source, wall, source, intensity))
                 total_dist = total_dist + np.linalg.norm(new_source - source)
                 dir = new_dir
                 source = new_source
                 # Only check out to some number of ms
-                if total_dist / speed_of_sound > max_time:
-                    if reflected_to_rfz:
-                        hits.append(temp_hits)
-                    break
+            if reflected_to_rfz:
+                hits.append(temp_hits)
 
         return hits
 
@@ -522,7 +542,7 @@ def plot_hits(fig, hits: typing.List[typing.List[Hit]], manually_advance=False):
 
     plt.clf()
     room.draw(fig, ax)
-    colors = ["b", "g", "r", "y", "c", "m", "y", "k", "b", "g", "p", "c"]
+    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
     for i, hh in enumerate(hits):
         for h in hh:
             if manually_advance:
@@ -532,7 +552,8 @@ def plot_hits(fig, hits: typing.List[typing.List[Hit]], manually_advance=False):
                 [h.pos[0], h.parent[0]],
                 [h.pos[1], h.parent[1]],
                 marker="o",
-                color=colors[i],
+                color=colors[i % len(colors)],
+                linewidth=4 * h.intensity,
             )
             plt.draw()
 
@@ -552,14 +573,18 @@ if __name__ == "__main__":
     if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
-    room.listening_triangle("Front", 0.8, 0.3, 1.5, Source(vert_disp=10, horiz_disp=10))
+    room.listening_triangle("Front", 0.8, 0.3, 1.5, Source(vert_disp=5, horiz_disp=5))
     hits = room.trace(
-        num_samples=1,
-        max_time=0.1,
+        num_samples=50,
+        max_time=0.2,
+        min_gain=-10,
         order=50,
-        rfz_radius=0.8,
+        rfz_radius=0.5,
+        horiz_disp=60,
+        vert_disp=50,
     )
 
     fig, ax = plt.subplots()
-    plot_hits(fig, hits, manually_advance=True)
+    plot_hits(fig, hits, manually_advance=False)
+    [print(f"{x.name}: {x.abs}") for x in room.walls]
     plt.show()
