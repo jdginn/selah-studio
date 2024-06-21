@@ -495,7 +495,7 @@ class Room:
 
         return hits
 
-    def draw(self, fig, ax):
+    def draw_from_above(self):
         plt.scatter(
             self._lt.l_source()[0], self._lt.l_source()[1], marker="x", linewidth=8
         )
@@ -508,13 +508,32 @@ class Room:
 
         plt.draw()
 
-        # self.mesh.show()
-        # TODO: fix magic number
         sec = self.mesh.section((0, 0, 1), (0, 0, 0.5))
         if sec is None:
             raise RuntimeError
         outline = sec.to_planar()[0]
         outline.apply_translation((-outline.bounds[0][0], -outline.bounds[0][1]))
+        outline.plot_entities()
+
+    def draw_from_side(self):
+        plt.scatter(
+            self._lt.l_source()[0], self._lt.l_source()[2], marker="x", linewidth=8
+        )
+        plt.scatter(
+            self._lt.listening_pos()[0],
+            self._lt.listening_pos()[2],
+            marker="h",
+            linewidth=12,
+        )
+
+        plt.draw()
+
+        sec = self.mesh.section((0, 1, 0), (0, 3, 0))
+        if sec is None:
+            raise RuntimeError
+        outline = sec.to_planar()[0]
+        outline.apply_translation((-outline.bounds[0][0], -outline.bounds[0][1]))
+        # TODO: need to rotate outline by 90deg
         outline.plot_entities()
 
     def plot_hits(self, hits: typing.List[typing.List[Hit]]):
@@ -533,36 +552,69 @@ class Room:
         sc.show()
 
 
-def animate_hits(fig, hits: typing.List[Hit]):
+def plot_hits(
+    fig, room: Room, hits: typing.List[typing.List[Hit]], manually_advance=False
+):
 
-    def plot_single_hit(frame):
-        h = hits[frame]
-        point = ax.scatter(h.pos[0], h.pos[1])
-        line = ax.plot([h.pos[0], h.parent[0]], [h.pos[1], h.parent[0]], marker="o")
-        plt.waitforbuttonpress()
-        return (point, line)
-
-    fig.cla()
-    room.draw(fig, ax)
-    anim = animation.FuncAnimation(
-        fig=fig, func=plot_single_hit, frames=len(hits), interval=600
-    )
-    plt.show()
-
-
-def plot_hits(fig, hits: typing.List[typing.List[Hit]], manually_advance=False):
-
-    plt.clf()
-    room.draw(fig, ax)
+    ax1 = fig.add_subplot(1, 2, 1)
+    room.draw_from_above()
+    ax2 = fig.add_subplot(1, 2, 2)
+    room.draw_from_side()
     colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
     for i, hh in enumerate(hits):
         for h in hh:
             if manually_advance:
                 plt.waitforbuttonpress()
-            plt.scatter(h.pos[0], h.pos[1])
-            plt.plot(
+            ax1.scatter(h.pos[0], h.pos[1])
+            ax1.plot(
                 [h.pos[0], h.parent[0]],
                 [h.pos[1], h.parent[1]],
+                marker="o",
+                color=colors[i % len(colors)],
+                linewidth=4 * h.intensity,
+            )
+            ax2.scatter(h.pos[0], h.pos[2])
+            ax2.plot(
+                [h.pos[0], h.parent[0]],
+                [h.pos[2], h.parent[2]],
+                marker="o",
+                color=colors[i % len(colors)],
+                linewidth=4 * h.intensity,
+            )
+            plt.draw()
+
+
+def plot_hits_top(ax, hits: typing.List[typing.List[Hit]], manually_advance=False):
+
+    room.draw_from_above()
+    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
+    for i, hh in enumerate(hits):
+        for h in hh:
+            if manually_advance:
+                plt.waitforbuttonpress()
+            ax.scatter(h.pos[0], h.pos[1])
+            ax.plot(
+                [h.pos[0], h.parent[0]],
+                [h.pos[1], h.parent[1]],
+                marker="o",
+                color=colors[i % len(colors)],
+                linewidth=4 * h.intensity,
+            )
+            plt.draw()
+
+
+def plot_hits_side(ax, hits: typing.List[typing.List[Hit]], manually_advance=False):
+
+    room.draw_from_side()
+    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
+    for i, hh in enumerate(hits):
+        for h in hh:
+            if manually_advance:
+                plt.waitforbuttonpress()
+            ax.scatter(h.pos[0], h.pos[2])
+            ax.plot(
+                [h.pos[0], h.parent[0]],
+                [h.pos[2], h.parent[2]],
                 marker="o",
                 color=colors[i % len(colors)],
                 linewidth=4 * h.intensity,
@@ -585,19 +637,17 @@ if __name__ == "__main__":
     if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
-    room.listening_triangle("Front", 0.8, 0.3, 1.5, Source(vert_disp=5, horiz_disp=5))
+    room.listening_triangle("Front", 0.8, 0.3, 1.7, Source(vert_disp=5, horiz_disp=5))
     hits = room.trace(
-        num_samples=1,
+        num_samples=100,
         max_time=0.1,
         min_gain=-10,
         order=50,
-        rfz_radius=0.5,
+        rfz_radius=0.4,
         horiz_disp=60,
         vert_disp=50,
     )
 
-    fig, ax = plt.subplots()
-    plot_hits(fig, hits, manually_advance=False)
-    # room.plot_hits(hits)
-    plot_hits(room.mesh, hits)
+    fig = plt.figure()
+    plot_hits(fig, room, hits, False)
     plt.show()
