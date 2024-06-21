@@ -163,12 +163,16 @@ class ListeningTriangle:
         dist_from_wall: float,
         dist_from_center: float,
         source: Source,
+        **kwargs,
     ) -> None:
         self._wall = wall
         self.height = height
         self.dist_from_wall = dist_from_wall
         self.dist_from_center = dist_from_center
         self.source = source
+
+        if kwargs.get("listen_pos") is not None:
+            self._listen_pos = kwargs["listen_pos"]
 
         self._axis, self._wall_pos = self._wall.pos(self.height)
         match self._axis:
@@ -213,6 +217,8 @@ class ListeningTriangle:
                 raise RuntimeError
 
     def listening_pos(self) -> npt.NDArray:
+        if self._listen_pos is not None:
+            return self._listen_pos
         p = self._wall.center_pos()
         match self._axis:
             case Axis.X:
@@ -347,7 +353,10 @@ class Room:
         dist_from_wall: float,
         dist_from_center: float,
         source: Source,
+        **kwargs,
     ) -> None:
+        if kwargs.get("listen_pos") is not None:
+
         self._lt = ListeningTriangle(
             self.get_wall(wall_name), height, dist_from_wall, dist_from_center, source
         )
