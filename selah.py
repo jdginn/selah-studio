@@ -24,6 +24,8 @@ namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/0
 #     "Arch": pra.materials_data["brickwork"],
 # }
 
+SPEED_OF_SOUND = 336
+
 
 def db(gain: float) -> float:
     return 10 * math.log10(gain)
@@ -217,8 +219,9 @@ class ListeningTriangle:
                 raise RuntimeError
 
     def listening_pos(self) -> npt.NDArray:
-        if self._listen_pos is not None:
-            return self._listen_pos
+        p = self._wall.center_pos()
+        if hasattr(self, "_listen_pos"):
+            return p + [self._listen_pos, 0, self.height]
         p = self._wall.center_pos()
         match self._axis:
             case Axis.X:
@@ -310,6 +313,7 @@ class Hit:
     wall: typing.Union[Wall, None]
     parent: np.ndarray
     intensity: float
+    total_dist: float
 
 
 @dataclass
@@ -355,10 +359,13 @@ class Room:
         source: Source,
         **kwargs,
     ) -> None:
-        if kwargs.get("listen_pos") is not None:
-
         self._lt = ListeningTriangle(
-            self.get_wall(wall_name), height, dist_from_wall, dist_from_center, source
+            self.get_wall(wall_name),
+            height,
+            dist_from_wall,
+            dist_from_center,
+            source,
+            **kwargs,
         )
         self.walls = self.walls + self._lt.additional_walls(self.mesh)
 
@@ -394,7 +401,7 @@ class Room:
     def trace(
         self,
         **kwargs,
-    ) -> typing.List[typing.List[Hit]]:
+    ) -> typing.Tuple[typing.List[typing.List[Hit]], typing.List[Hit]]:
         order = kwargs.get("order", 10)
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
@@ -403,8 +410,9 @@ class Room:
         vert_disp: float = kwargs.get("vert_disp", 50) / 360 * 2 * math.pi
         horiz_disp: float = kwargs.get("horiz_disp", 60) / 360 * 2 * math.pi
         # TODO: kwarg source selection
+        self._max_time = max_time
+        self._min_gain = min_gain
 
-        speed_of_sound = 336
         max_dist = self.engine.get_max_distance()
 
         # TODO: factor in absorptive losses
@@ -435,11 +443,12 @@ class Room:
                 shots.append(Shot(rescaled))
 
         hits: typing.List[typing.List[Hit]] = []
+        arrivals: typing.List[Hit] = []
         intersector = trimesh.ray.ray_triangle.RayMeshIntersector(self.mesh)
         for j, shot in enumerate(shots):
             temp_hits: typing.List[Hit] = []
             source = l_speaker
-            total_dist = 0
+            total_dist: float = 0
             reflected_to_rfz = False
             intensity = 1
             wall: typing.Union[Wall, None] = None
@@ -479,30 +488,43 @@ class Room:
                 new_dir = dir - norm * 2 * dir.dot(norm)
 
                 # Check whether this reflection passes within the RFZ
-                dist_from_crit = np.linalg.norm(
-                    np.cross(new_source - source, listen_pos - source)
-                    / np.linalg.norm(new_source - source)
+                dist_from_crit = float(
+                    np.linalg.norm(
+                        np.cross(new_source - source, listen_pos - source)
+                        / np.linalg.norm(new_source - source)
+                    )
                 )
                 if dist_from_crit < rfz_radius and i > 1:
                     # We only care about rays that reflect to the RFZ
                     reflected_to_rfz = True
-                    print(
-                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist / speed_of_sound * 1000:.2f}ms"
+                    arrivals.append(
+                        Hit(
+                            listen_pos,
+                            wall,
+                            source,
+                            intensity,
+                            total_dist + dist_from_crit,
+                        )
                     )
-                if total_dist / speed_of_sound > max_time:
+                    if not isinstance(wall, Wall):
+                        raise RuntimeError
+                    print(
+                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist / SPEED_OF_SOUND * 1000:.2f}ms"
+                    )
+                if total_dist / SPEED_OF_SOUND > max_time:
                     break
                 if db(intensity) < min_gain:
                     break
 
-                temp_hits.append(Hit(new_source, wall, source, intensity))
-                total_dist = total_dist + np.linalg.norm(new_source - source)
+                temp_hits.append(Hit(new_source, wall, source, intensity, total_dist))
+                total_dist = total_dist + float(np.linalg.norm(new_source - source))
                 dir = new_dir
                 source = new_source
                 # Only check out to some number of ms
             if reflected_to_rfz:
                 hits.append(temp_hits)
 
-        return hits
+        return (hits, arrivals)
 
     def draw_from_above(self):
         plt.scatter(
@@ -545,90 +567,49 @@ class Room:
         # TODO: need to rotate outline by 90deg
         outline.plot_entities()
 
-    def plot_hits(self, hits: typing.List[typing.List[Hit]]):
-        sc = trimesh.Scene(self.mesh)
-        points: typing.List[npt.NDArray] = []
-        paths: typing.List[trimesh.path.Path3D] = []
-        for hh in hits:
+    def plot_hits(
+        self, fig, hits: typing.List[typing.List[Hit]], manually_advance=False
+    ):
+
+        ax1 = fig.add_subplot(2, 2, 1)
+        self.draw_from_above()
+        ax2 = fig.add_subplot(2, 2, 2)
+        self.draw_from_side()
+        colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
+        for i, hh in enumerate(hits):
             for h in hh:
-                points.append(h.pos)
-                p = trimesh.load_path([h.parent, h.pos])
-                sc.add_geometry(p)
-                # paths.append(trimesh.path.Path3D([tme.Line([h.parent, h.pos])]))
+                if manually_advance:
+                    plt.waitforbuttonpress()
+                ax1.scatter(h.pos[0], h.pos[1])
+                ax1.plot(
+                    [h.pos[0], h.parent[0]],
+                    [h.pos[1], h.parent[1]],
+                    marker="o",
+                    color=colors[i % len(colors)],
+                    linewidth=4 * h.intensity,
+                )
+                ax2.scatter(h.pos[0], h.pos[2])
+                ax2.plot(
+                    [h.pos[0], h.parent[0]],
+                    [h.pos[2], h.parent[2]],
+                    marker="o",
+                    color=colors[i % len(colors)],
+                    linewidth=4 * h.intensity,
+                )
+                plt.draw()
 
-        # pc = trimesh.PointCloud(points)
-        # sc.add_geometry(pc)
-        sc.show()
-
-
-def plot_hits(
-    fig, room: Room, hits: typing.List[typing.List[Hit]], manually_advance=False
-):
-
-    ax1 = fig.add_subplot(1, 2, 1)
-    room.draw_from_above()
-    ax2 = fig.add_subplot(1, 2, 2)
-    room.draw_from_side()
-    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
-    for i, hh in enumerate(hits):
-        for h in hh:
-            if manually_advance:
-                plt.waitforbuttonpress()
-            ax1.scatter(h.pos[0], h.pos[1])
-            ax1.plot(
-                [h.pos[0], h.parent[0]],
-                [h.pos[1], h.parent[1]],
-                marker="o",
+        ax3 = fig.add_subplot(2, 1, 2)
+        ax3.set_xlabel("time (ms)")
+        ax3.set_ylabel("intensity (dB)")
+        ax3.set_ylim(self._min_gain, 0)
+        # ax3.set_xlim(0, self._max_time * 1000)
+        for i, a in enumerate(arrivals):
+            ax3.bar(
+                a.total_dist / 336 * 1000,
+                bottom=db(a.intensity),
+                height=self._min_gain,
                 color=colors[i % len(colors)],
-                linewidth=4 * h.intensity,
             )
-            ax2.scatter(h.pos[0], h.pos[2])
-            ax2.plot(
-                [h.pos[0], h.parent[0]],
-                [h.pos[2], h.parent[2]],
-                marker="o",
-                color=colors[i % len(colors)],
-                linewidth=4 * h.intensity,
-            )
-            plt.draw()
-
-
-def plot_hits_top(ax, hits: typing.List[typing.List[Hit]], manually_advance=False):
-
-    room.draw_from_above()
-    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
-    for i, hh in enumerate(hits):
-        for h in hh:
-            if manually_advance:
-                plt.waitforbuttonpress()
-            ax.scatter(h.pos[0], h.pos[1])
-            ax.plot(
-                [h.pos[0], h.parent[0]],
-                [h.pos[1], h.parent[1]],
-                marker="o",
-                color=colors[i % len(colors)],
-                linewidth=4 * h.intensity,
-            )
-            plt.draw()
-
-
-def plot_hits_side(ax, hits: typing.List[typing.List[Hit]], manually_advance=False):
-
-    room.draw_from_side()
-    colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
-    for i, hh in enumerate(hits):
-        for h in hh:
-            if manually_advance:
-                plt.waitforbuttonpress()
-            ax.scatter(h.pos[0], h.pos[2])
-            ax.plot(
-                [h.pos[0], h.parent[0]],
-                [h.pos[2], h.parent[2]],
-                marker="o",
-                color=colors[i % len(colors)],
-                linewidth=4 * h.intensity,
-            )
-            plt.draw()
 
 
 if __name__ == "__main__":
@@ -642,15 +623,20 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    scene = trimesh.load(args.file).scaled(1 / 1000)
+    scene = trimesh.load(args.file)
+    if not isinstance(scene, trimesh.Scene):
+        raise RuntimeError
+    scene = scene.scaled(1 / 1000)
     if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
-    room.listening_triangle("Front", 0.8, 0.3, 1.7, Source(vert_disp=5, horiz_disp=5))
-    hits = room.trace(
-        num_samples=100,
+    room.listening_triangle(
+        "Front", 0.8, 0.3, 1.7, Source(vert_disp=5, horiz_disp=5), listen_pos=2.0
+    )
+    (hits, arrivals) = room.trace(
+        num_samples=50,
         max_time=0.1,
-        min_gain=-10,
+        min_gain=-20,
         order=50,
         rfz_radius=0.4,
         horiz_disp=60,
@@ -658,5 +644,5 @@ if __name__ == "__main__":
     )
 
     fig = plt.figure()
-    plot_hits(fig, room, hits, False)
+    room.plot_hits(fig, hits, False)
     plt.show()
