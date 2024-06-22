@@ -643,6 +643,7 @@ if __name__ == "__main__":
         vert_disp=50,
     )
 
+    plt.ion()
     fig = plt.figure()
     room.plot_hits(fig, hits, False)
     plt.show()
