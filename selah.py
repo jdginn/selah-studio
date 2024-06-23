@@ -318,6 +318,14 @@ class Reflection:
     parent: np.ndarray
     intensity: float
     total_dist: float
+    # For visualization purposes
+    _color: str = ""
+
+    def color(self, default: str) -> str:
+        if self._color != "":
+            return self._color
+        self._color = default
+        return default
 
 
 @dataclass
@@ -328,11 +336,12 @@ class Shot:
         return f"x:{self.dir[0]}y:{self.dir[1]}z:{self.dir[2]}".__hash__()
 
 
-@dataclass
 class Arrival:
     pos: np.ndarray
     parent: Reflection
     reflection_list: typing.List[Reflection]
+    # For visualization purposes
+    _color: str
 
     def __init__(self, pos: npt.NDArray, reflections: typing.List[Reflection]):
         self.pos = pos
@@ -340,6 +349,13 @@ class Arrival:
         self.parent = reflections[-1]
         self.intensity = self.parent.intensity
         self.total_dist = self.parent.total_dist + np.linalg.norm(pos - self.parent.pos)
+        self._color = ""
+
+    def color(self, default: str) -> str:
+        if self._color != "":
+            return self._color
+        self._color = default
+        return default
 
 
 class Room:
@@ -580,17 +596,15 @@ class Room:
         # TODO: need to rotate outline by 90deg
         outline.plot_entities()
 
-    DEFAULT_COLORS = (["b", "g", "r", "y", "c", "m", "y", "k"],)
-
     def plot_hits(
         self,
         fig,
         hits: typing.List[typing.List[Reflection]],
         arrivals: typing.List[Arrival],
         manually_advance=False,
-        colors=DEFAULT_COLORS,
     ):
 
+        colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
         ax1 = fig.add_subplot(2, 2, 1)
         self.draw_from_above()
         ax2 = fig.add_subplot(2, 2, 2)
@@ -604,7 +618,7 @@ class Room:
                     [h.pos[0], h.parent[0]],
                     [h.pos[1], h.parent[1]],
                     marker="o",
-                    color=colors[i % len(colors)],
+                    color=h.color(colors[i % len(colors)]),
                     linewidth=4 * h.intensity,
                 )
                 ax2.scatter(h.pos[0], h.pos[2])
@@ -612,7 +626,7 @@ class Room:
                     [h.pos[0], h.parent[0]],
                     [h.pos[2], h.parent[2]],
                     marker="o",
-                    color=colors[i % len(colors)],
+                    color=h.color(colors[i % len(colors)]),
                     linewidth=4 * h.intensity,
                 )
                 plt.draw()
@@ -622,13 +636,12 @@ class Room:
         ax3.set_xlim(0, self._max_time * 1000)
         ax3.set_ylabel("intensity (dB)")
         ax3.set_ylim(self._min_gain, 0)
-        # ax3.set_xlim(0, self._max_time * 1000)
         for i, a in enumerate(arrivals):
             ax3.bar(
-                a.total_dist / 336 * 1000,
+                a.total_dist / SPEED_OF_SOUND * 1000,
                 bottom=db(a.intensity),
                 height=self._min_gain,
-                color=colors[i % len(colors)],
+                color=a.color(colors[i % len(colors)]),
                 picker=True,
             )
 
@@ -657,7 +670,6 @@ class Room:
                             [arrival.reflection_list],
                             [arrival],
                             False,
-                            colors=[DEFAULT_COLOR[i % len(DEFAULT_COLOR)]],
                         )
 
         def on_press(event):
