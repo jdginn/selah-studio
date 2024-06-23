@@ -35,7 +35,13 @@ class Axis(Enum):
     Z = 3
 
 
-material_abs = {"brick": 0.04, "gypsum": 0.05, "diffuser": 0.9, "wood": 0.1}
+material_abs = {
+    "brick": 0.04,
+    "gypsum": 0.05,
+    "diffuser": 0.9,
+    "wood": 0.1,
+    "absorber": 0.95,
+}
 
 wall_materials = {
     "Default": "gypsum",
@@ -45,7 +51,10 @@ wall_materials = {
     "Doorway": "brick",
     "Front": "gypsum",
     "Cutout": "diffuser",
+    "Ceiling Diffuser": "diffuser",
     "Back": "brick",
+    "Door Absorber": "absorber",
+    "Street Absorber": "absorber",
 }
 
 
@@ -462,8 +471,8 @@ class Room:
                     # TODO: for now this only works for sources on X-axis wall!
                     [
                         0,
-                        -horiz_disp + h_step_size * h,
-                        -vert_disp + v_step_size * v,
+                        -horiz_disp / 2 + h_step_size * h,
+                        -vert_disp / 2 + v_step_size * v,
                     ]
                 )
                 adjusted = source_normal + unscaled
@@ -690,15 +699,13 @@ if __name__ == "__main__":
     if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
-    room.listening_triangle(
-        "Front", 0.8, 0.3, 1.7, Source(vert_disp=5, horiz_disp=5), listen_pos=2.0
-    )
+    room.listening_triangle("Front", 0.8, 0.5, 1.5, Source(), listen_pos=2)
     (hits, arrivals) = room.trace(
-        num_samples=50,
+        num_samples=500,
         max_time=0.1,
         min_gain=-20,
         order=50,
-        rfz_radius=0.4,
+        rfz_radius=0.3,
         horiz_disp=60,
         vert_disp=50,
     )
