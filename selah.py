@@ -8,6 +8,9 @@ from enum import Enum
 import IPython
 import trimesh
 import trimesh.path.entities as tme
+import matplotlib.image
+import matplotlib.text as text
+import matplotlib.patches as patches
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
@@ -308,7 +311,7 @@ class ListeningTriangle:
 
 
 @dataclass
-class Hit:
+class Reflection:
     pos: np.ndarray
     wall: typing.Union[Wall, None]
     parent: np.ndarray
@@ -322,6 +325,20 @@ class Shot:
 
     def __hash__(self) -> int:
         return f"x:{self.dir[0]}y:{self.dir[1]}z:{self.dir[2]}".__hash__()
+
+
+@dataclass
+class Arrival:
+    pos: np.ndarray
+    parent: Reflection
+    reflection_list: typing.List[Reflection]
+
+    def __init__(self, pos: npt.NDArray, reflections: typing.List[Reflection]):
+        self.pos = pos
+        self.reflection_list = reflections
+        self.parent = reflections[-1]
+        self.intensity = self.parent.intensity
+        self.total_dist = self.parent.total_dist + np.linalg.norm(pos - self.parent.pos)
 
 
 class Room:
@@ -401,7 +418,7 @@ class Room:
     def trace(
         self,
         **kwargs,
-    ) -> typing.Tuple[typing.List[typing.List[Hit]], typing.List[Hit]]:
+    ) -> typing.Tuple[typing.List[typing.List[Reflection]], typing.List[Arrival]]:
         order = kwargs.get("order", 10)
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
@@ -442,11 +459,11 @@ class Room:
                 rescaled = adjusted / np.linalg.norm(adjusted)
                 shots.append(Shot(rescaled))
 
-        hits: typing.List[typing.List[Hit]] = []
-        arrivals: typing.List[Hit] = []
+        hits: typing.List[typing.List[Reflection]] = []
+        arrivals: typing.List[Arrival] = []
         intersector = trimesh.ray.ray_triangle.RayMeshIntersector(self.mesh)
         for j, shot in enumerate(shots):
-            temp_hits: typing.List[Hit] = []
+            temp_hits: typing.List[Reflection] = []
             source = l_speaker
             total_dist: float = 0
             reflected_to_rfz = False
@@ -487,6 +504,10 @@ class Room:
                     raise RuntimeError
                 new_dir = dir - norm * 2 * dir.dot(norm)
 
+                temp_hits.append(
+                    Reflection(new_source, wall, source, intensity, total_dist)
+                )
+
                 # Check whether this reflection passes within the RFZ
                 dist_from_crit = float(
                     np.linalg.norm(
@@ -497,15 +518,7 @@ class Room:
                 if dist_from_crit < rfz_radius and i > 1:
                     # We only care about rays that reflect to the RFZ
                     reflected_to_rfz = True
-                    arrivals.append(
-                        Hit(
-                            listen_pos,
-                            wall,
-                            source,
-                            intensity,
-                            total_dist + dist_from_crit,
-                        )
-                    )
+                    arrivals.append(Arrival(listen_pos, temp_hits))
                     if not isinstance(wall, Wall):
                         raise RuntimeError
                     print(
@@ -516,7 +529,6 @@ class Room:
                 if db(intensity) < min_gain:
                     break
 
-                temp_hits.append(Hit(new_source, wall, source, intensity, total_dist))
                 total_dist = total_dist + float(np.linalg.norm(new_source - source))
                 dir = new_dir
                 source = new_source
@@ -568,7 +580,11 @@ class Room:
         outline.plot_entities()
 
     def plot_hits(
-        self, fig, hits: typing.List[typing.List[Hit]], manually_advance=False
+        self,
+        fig,
+        hits: typing.List[typing.List[Reflection]],
+        arrivals: typing.List[Arrival],
+        manually_advance=False,
     ):
 
         ax1 = fig.add_subplot(2, 2, 1)
@@ -600,6 +616,7 @@ class Room:
 
         ax3 = fig.add_subplot(2, 1, 2)
         ax3.set_xlabel("time (ms)")
+        ax3.set_xlim(0, self._max_time * 1000)
         ax3.set_ylabel("intensity (dB)")
         ax3.set_ylim(self._min_gain, 0)
         # ax3.set_xlim(0, self._max_time * 1000)
@@ -609,7 +626,49 @@ class Room:
                 bottom=db(a.intensity),
                 height=self._min_gain,
                 color=colors[i % len(colors)],
+                picker=True,
             )
+
+    def plot_hits_interactive(
+        self,
+        fig,
+        hits: typing.List[typing.List[Reflection]],
+        arrivals: typing.List[Arrival],
+        manually_advance=False,
+    ):
+        orig_hits = hits
+        orig_arrivals = arrivals
+
+        def onpick(event):
+            EPS = 1
+            if isinstance(event.artist, patches.Rectangle):
+                rect = event.artist
+                print("picked rectangle:", rect.get_x())
+                for arrival in arrivals:
+                    if (
+                        abs((arrival.total_dist / SPEED_OF_SOUND * 1000) - rect.get_x())
+                        < EPS
+                    ):
+                        # self.plot_hits_interactive(
+                        self.plot_hits(fig, [arrival.reflection_list], [arrival], False)
+            if isinstance(event.artist, matplotlib.image.AxesImage):
+                print("AI")
+                self.plot_hits_interactive(
+                    fig, orig_hits, orig_arrivals, manually_advance
+                )
+            if isinstance(event.artist, text.Text):
+                print("TEXT")
+                self.plot_hits_interactive(
+                    fig, orig_hits, orig_arrivals, manually_advance
+                )
+            # else:
+            #     self.plot_hits_interactive(
+            #         fig, orig_hits, orig_arrivals, manually_advance
+            #     )
+            #     print("OTHER")
+
+        fig.canvas.mpl_connect("pick_event", onpick)
+        self.plot_hits(fig, hits, arrivals, manually_advance)
 
 
 if __name__ == "__main__":
@@ -645,5 +704,5 @@ if __name__ == "__main__":
 
     plt.ion()
     fig = plt.figure()
-    room.plot_hits(fig, hits, False)
-    plt.show()
+    room.plot_hits_interactive(fig, hits, arrivals, False)
+    plt.show(block=True)
