@@ -17,6 +17,7 @@ import numpy as np
 import numpy.typing as npt
 import pyroomacoustics as pra
 import pyroomacoustics.libroom as libroom
+from trimesh.visual import DEFAULT_COLOR
 
 namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
 
@@ -579,19 +580,21 @@ class Room:
         # TODO: need to rotate outline by 90deg
         outline.plot_entities()
 
+    DEFAULT_COLORS = (["b", "g", "r", "y", "c", "m", "y", "k"],)
+
     def plot_hits(
         self,
         fig,
         hits: typing.List[typing.List[Reflection]],
         arrivals: typing.List[Arrival],
         manually_advance=False,
+        colors=DEFAULT_COLORS,
     ):
 
         ax1 = fig.add_subplot(2, 2, 1)
         self.draw_from_above()
         ax2 = fig.add_subplot(2, 2, 2)
         self.draw_from_side()
-        colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
         for i, hh in enumerate(hits):
             for h in hh:
                 if manually_advance:
@@ -644,22 +647,18 @@ class Room:
             if isinstance(event.artist, patches.Rectangle):
                 rect = event.artist
                 print("picked rectangle:", rect.get_x())
-                for arrival in arrivals:
+                for i, arrival in enumerate(arrivals):
                     if (
                         abs((arrival.total_dist / SPEED_OF_SOUND * 1000) - rect.get_x())
                         < EPS
                     ):
-                        self.plot_hits(fig, [arrival.reflection_list], [arrival], False)
-            if isinstance(event.artist, matplotlib.image.AxesImage):
-                print("AI")
-                self.plot_hits_interactive(
-                    fig, orig_hits, orig_arrivals, manually_advance
-                )
-            if isinstance(event.artist, text.Text):
-                print("TEXT")
-                self.plot_hits_interactive(
-                    fig, orig_hits, orig_arrivals, manually_advance
-                )
+                        self.plot_hits(
+                            fig,
+                            [arrival.reflection_list],
+                            [arrival],
+                            False,
+                            colors=[DEFAULT_COLOR[i % len(DEFAULT_COLOR)]],
+                        )
 
         def on_press(event):
             match event.key:
