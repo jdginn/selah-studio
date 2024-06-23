@@ -1,23 +1,17 @@
 import argparse
 import math
 import typing
-import zipfile
 from dataclasses import dataclass
 from enum import Enum
 
 import IPython
 import trimesh
-import trimesh.path.entities as tme
-import matplotlib.image
-import matplotlib.text as text
 import matplotlib.patches as patches
-import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import pyroomacoustics as pra
 import pyroomacoustics.libroom as libroom
-from trimesh.visual import DEFAULT_COLOR
 
 namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
 
