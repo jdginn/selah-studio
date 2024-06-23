@@ -596,10 +596,9 @@ class Room:
         # TODO: need to rotate outline by 90deg
         outline.plot_entities()
 
-    def plot_hits(
+    def plot_arrivals(
         self,
         fig,
-        hits: typing.List[typing.List[Reflection]],
         arrivals: typing.List[Arrival],
         manually_advance=False,
     ):
@@ -609,8 +608,21 @@ class Room:
         self.draw_from_above()
         ax2 = fig.add_subplot(2, 2, 2)
         self.draw_from_side()
-        for i, hh in enumerate(hits):
-            for h in hh:
+        ax3 = fig.add_subplot(2, 1, 2)
+        ax3.set_xlabel("time (ms)")
+        ax3.set_xlim(0, self._max_time * 1000)
+        ax3.set_ylabel("intensity (dB)")
+        ax3.set_ylim(self._min_gain, 0)
+        for i, a in enumerate(arrivals):
+            color = colors[i % len(colors)]
+            ax3.bar(
+                a.total_dist / SPEED_OF_SOUND * 1000,
+                bottom=db(a.intensity),
+                height=self._min_gain,
+                color=a.color(color),
+                picker=True,
+            )
+            for h in a.reflection_list:
                 if manually_advance:
                     plt.waitforbuttonpress()
                 ax1.scatter(h.pos[0], h.pos[1])
@@ -618,7 +630,7 @@ class Room:
                     [h.pos[0], h.parent[0]],
                     [h.pos[1], h.parent[1]],
                     marker="o",
-                    color=h.color(colors[i % len(colors)]),
+                    color=h.color(color),
                     linewidth=4 * h.intensity,
                 )
                 ax2.scatter(h.pos[0], h.pos[2])
@@ -626,48 +638,30 @@ class Room:
                     [h.pos[0], h.parent[0]],
                     [h.pos[2], h.parent[2]],
                     marker="o",
-                    color=h.color(colors[i % len(colors)]),
+                    color=h.color(color),
                     linewidth=4 * h.intensity,
                 )
                 plt.draw()
 
-        ax3 = fig.add_subplot(2, 1, 2)
-        ax3.set_xlabel("time (ms)")
-        ax3.set_xlim(0, self._max_time * 1000)
-        ax3.set_ylabel("intensity (dB)")
-        ax3.set_ylim(self._min_gain, 0)
-        for i, a in enumerate(arrivals):
-            ax3.bar(
-                a.total_dist / SPEED_OF_SOUND * 1000,
-                bottom=db(a.intensity),
-                height=self._min_gain,
-                color=a.color(colors[i % len(colors)]),
-                picker=True,
-            )
-
-    def plot_hits_interactive(
+    def plot_arrivals_interactive(
         self,
         fig,
-        hits: typing.List[typing.List[Reflection]],
         arrivals: typing.List[Arrival],
         manually_advance=False,
     ):
-        orig_hits = hits
         orig_arrivals = arrivals
 
         def on_pick(event):
             EPS = 1
             if isinstance(event.artist, patches.Rectangle):
                 rect = event.artist
-                print("picked rectangle:", rect.get_x())
-                for i, arrival in enumerate(arrivals):
+                for arrival in arrivals:
                     if (
                         abs((arrival.total_dist / SPEED_OF_SOUND * 1000) - rect.get_x())
                         < EPS
                     ):
-                        self.plot_hits(
+                        self.plot_arrivals(
                             fig,
-                            [arrival.reflection_list],
                             [arrival],
                             False,
                         )
@@ -675,17 +669,13 @@ class Room:
         def on_press(event):
             match event.key:
                 case "x":
-                    self.plot_hits_interactive(
-                        fig, orig_hits, orig_arrivals, manually_advance
-                    )
+                    self.plot_arrivals(fig, orig_arrivals, manually_advance)
                 case "backspace":
-                    self.plot_hits_interactive(
-                        fig, orig_hits, orig_arrivals, manually_advance
-                    )
+                    self.plot_arrivals(fig, orig_arrivals, manually_advance)
 
         fig.canvas.mpl_connect("pick_event", on_pick)
         fig.canvas.mpl_connect("key_press_event", on_press)
-        self.plot_hits(fig, hits, arrivals, manually_advance)
+        self.plot_arrivals(fig, arrivals, manually_advance)
 
 
 if __name__ == "__main__":
@@ -721,5 +711,5 @@ if __name__ == "__main__":
 
     plt.ion()
     fig = plt.figure()
-    room.plot_hits_interactive(fig, hits, arrivals, False)
+    room.plot_arrivals_interactive(fig, arrivals, False)
     plt.show(block=True)
