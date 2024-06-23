@@ -639,7 +639,7 @@ class Room:
         orig_hits = hits
         orig_arrivals = arrivals
 
-        def onpick(event):
+        def on_pick(event):
             EPS = 1
             if isinstance(event.artist, patches.Rectangle):
                 rect = event.artist
@@ -649,7 +649,6 @@ class Room:
                         abs((arrival.total_dist / SPEED_OF_SOUND * 1000) - rect.get_x())
                         < EPS
                     ):
-                        # self.plot_hits_interactive(
                         self.plot_hits(fig, [arrival.reflection_list], [arrival], False)
             if isinstance(event.artist, matplotlib.image.AxesImage):
                 print("AI")
@@ -661,13 +660,20 @@ class Room:
                 self.plot_hits_interactive(
                     fig, orig_hits, orig_arrivals, manually_advance
                 )
-            # else:
-            #     self.plot_hits_interactive(
-            #         fig, orig_hits, orig_arrivals, manually_advance
-            #     )
-            #     print("OTHER")
 
-        fig.canvas.mpl_connect("pick_event", onpick)
+        def on_press(event):
+            match event.key:
+                case "x":
+                    self.plot_hits_interactive(
+                        fig, orig_hits, orig_arrivals, manually_advance
+                    )
+                case "backspace":
+                    self.plot_hits_interactive(
+                        fig, orig_hits, orig_arrivals, manually_advance
+                    )
+
+        fig.canvas.mpl_connect("pick_event", on_pick)
+        fig.canvas.mpl_connect("key_press_event", on_press)
         self.plot_hits(fig, hits, arrivals, manually_advance)
 
 
