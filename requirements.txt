@@ -6,3 +6,4 @@ trimesh
 pyfqmr
 pymesh
 networkx
+lxml
