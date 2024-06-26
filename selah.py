@@ -44,17 +44,19 @@ material_abs = {
 }
 
 wall_materials = {
-    "Default": "gypsum",
+    "Default": "brick",
     "Ceiling": "brick",
     "Floor": "wood",
     "Street": "brick",
     "Doorway": "brick",
     "Front": "gypsum",
-    "Cutout": "diffuser",
-    "Ceiling Diffuser": "diffuser",
     "Back": "brick",
     "Door Absorber": "absorber",
     "Street Absorber": "absorber",
+    "Door Fin": "absorber",
+    "Street Fin": "absorber",
+    "Back Diffuser": "diffuser",
+    "Ceiling Diffuser": "diffuser",
 }
 
 
@@ -481,7 +483,8 @@ class Room:
 
         hits: typing.List[typing.List[Reflection]] = []
         arrivals: typing.List[Arrival] = []
-        intersector = trimesh.ray.ray_triangle.RayMeshIntersector(self.mesh)
+        mesh = self.mesh
+        intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
         for j, shot in enumerate(shots):
             temp_hits: typing.List[Reflection] = []
             source = l_speaker
@@ -515,13 +518,14 @@ class Room:
                     # Check here for multiple hits
                     if np.linalg.norm(source - this_loc) > 0.001:
                         new_source = this_loc
-                        norm = self.mesh.face_normals[tri_idx]
+                        norm = mesh.face_normals[tri_idx]
                         wall = self.faces_to_wall(tri_idx)
                         intensity = intensity * (1 - wall.abs)
                         found = True
                         break
                 if not found:
-                    raise RuntimeError
+                    break
+                    # raise RuntimeError
                 new_dir = dir - norm * 2 * dir.dot(norm)
 
                 temp_hits.append(
@@ -699,11 +703,18 @@ if __name__ == "__main__":
     if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
-    room.listening_triangle("Front", 0.8, 0.5, 1.5, Source(), listen_pos=2)
+    room.listening_triangle(
+        wall_name="Front",
+        height=0.8,
+        dist_from_wall=0.2,
+        dist_from_center=1.2,
+        source=Source(),
+        listen_pos=2.4,
+    )
     (hits, arrivals) = room.trace(
-        num_samples=500,
+        num_samples=3000,
         max_time=0.1,
-        min_gain=-20,
+        min_gain=-10,
         order=50,
         rfz_radius=0.3,
         horiz_disp=60,
