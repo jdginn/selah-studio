@@ -598,9 +598,10 @@ class Room:
         sec = self.mesh.section((0, 1, 0), (0, 3, 0))
         if sec is None:
             raise RuntimeError
-        outline = sec.to_planar()[0]
+        outline: trimesh.path.Path2D = sec.to_planar()[0]
+        outline.apply_transform(((0, -1, 0), (-1, 0, 0), (0, 0, 1)))
+        # Rotate outline by 90deg
         outline.apply_translation((-outline.bounds[0][0], -outline.bounds[0][1]))
-        # TODO: need to rotate outline by 90deg
         outline.plot_entities()
 
     def plot_arrivals(
@@ -712,7 +713,7 @@ if __name__ == "__main__":
         listen_pos=2.4,
     )
     (hits, arrivals) = room.trace(
-        num_samples=3000,
+        num_samples=30,
         max_time=0.1,
         min_gain=-10,
         order=50,
