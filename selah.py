@@ -657,17 +657,19 @@ class Room:
         arrivals: typing.List[Arrival],
         manually_advance=False,
     ):
+        self._curr_arrival = 0
         orig_arrivals = arrivals
 
         def on_pick(event):
             EPS = 1
             if isinstance(event.artist, patches.Rectangle):
                 rect = event.artist
-                for arrival in arrivals:
+                for i, arrival in enumerate(arrivals):
                     if (
                         abs((arrival.total_dist / SPEED_OF_SOUND * 1000) - rect.get_x())
                         < EPS
                     ):
+                        self._curr_arrival = i
                         self.plot_arrivals(
                             fig,
                             [arrival],
@@ -680,6 +682,20 @@ class Room:
                     self.plot_arrivals(fig, orig_arrivals, manually_advance)
                 case "backspace":
                     self.plot_arrivals(fig, orig_arrivals, manually_advance)
+                case "right":
+                    self._curr_arrival += 1
+                    self.plot_arrivals(
+                        fig,
+                        [orig_arrivals[self._curr_arrival % len(orig_arrivals)]],
+                        manually_advance,
+                    )
+                case "left":
+                    self._curr_arrival -= 1
+                    self.plot_arrivals(
+                        fig,
+                        [orig_arrivals[self._curr_arrival % len(orig_arrivals)]],
+                        manually_advance,
+                    )
 
         fig.canvas.mpl_connect("pick_event", on_pick)
         fig.canvas.mpl_connect("key_press_event", on_press)
@@ -713,7 +729,7 @@ if __name__ == "__main__":
         listen_pos=2.4,
     )
     (hits, arrivals) = room.trace(
-        num_samples=30,
+        num_samples=300,
         max_time=0.1,
         min_gain=-10,
         order=50,
