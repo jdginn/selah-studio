@@ -44,7 +44,7 @@ material_abs = {
 }
 
 wall_materials = {
-    "Default": "brick",
+    "Default": "wood",
     "Ceiling": "brick",
     "Floor": "wood",
     "Street": "brick",
@@ -57,6 +57,7 @@ wall_materials = {
     "Street Fin": "absorber",
     "Back Diffuser": "diffuser",
     "Ceiling Diffuser": "diffuser",
+    "Spooky Curtain": "absorber",
 }
 
 
@@ -230,8 +231,7 @@ class ListeningTriangle:
     def listening_pos(self) -> npt.NDArray:
         p = self._wall.center_pos()
         if hasattr(self, "_listen_pos"):
-            return p + [self._listen_pos, 0, self.height]
-        p = self._wall.center_pos()
+            return p + [self._listen_pos, 0, 0]
         match self._axis:
             case Axis.X:
                 return np.array(
@@ -539,6 +539,12 @@ class Room:
                         / np.linalg.norm(new_source - source)
                     )
                 )
+                # Only check out to some number of ms
+                if total_dist / SPEED_OF_SOUND > max_time:
+                    break
+                # Only check out to some minimum gain
+                if db(intensity) < min_gain:
+                    break
                 if dist_from_crit < rfz_radius and i > 1:
                     # We only care about rays that reflect to the RFZ
                     reflected_to_rfz = True
@@ -548,17 +554,14 @@ class Room:
                     print(
                         f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist / SPEED_OF_SOUND * 1000:.2f}ms"
                     )
-                if total_dist / SPEED_OF_SOUND > max_time:
-                    break
-                if db(intensity) < min_gain:
-                    break
 
                 total_dist = total_dist + float(np.linalg.norm(new_source - source))
                 dir = new_dir
                 source = new_source
-                # Only check out to some number of ms
             if reflected_to_rfz:
                 hits.append(temp_hits)
+
+            arrivals.sort(key=lambda a: a.total_dist)
 
         return (hits, arrivals)
 
@@ -657,7 +660,7 @@ class Room:
         arrivals: typing.List[Arrival],
         manually_advance=False,
     ):
-        self._curr_arrival = 0
+        self._curr_arrival = -1
         orig_arrivals = arrivals
 
         def on_pick(event):
@@ -726,16 +729,16 @@ if __name__ == "__main__":
         dist_from_wall=0.2,
         dist_from_center=1.2,
         source=Source(),
-        listen_pos=2.4,
+        listen_pos=2.6,
     )
     (hits, arrivals) = room.trace(
-        num_samples=300,
+        num_samples=10_000,
         max_time=0.1,
         min_gain=-10,
         order=50,
-        rfz_radius=0.3,
+        rfz_radius=0.2,
         horiz_disp=60,
-        vert_disp=50,
+        vert_disp=40,
     )
 
     plt.ion()
