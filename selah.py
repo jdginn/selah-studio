@@ -29,6 +29,31 @@ def db(gain: float) -> float:
     return 10 * math.log10(gain)
 
 
+def lineseg_dist(p: npt.NDArray, a: npt.NDArray, b: npt.NDArray) -> npt.NDArray:
+
+    # normalized tangent vector
+    d = np.divide(b - a, np.linalg.norm(b - a))
+
+    # signed parallel distance components
+    s = np.dot(a - p, d)
+    t = np.dot(p - b, d)
+
+    # clamped parallel distance
+    h = np.maximum.reduce([s, t, 0])
+
+    # perpendicular distance component
+    c = np.cross(p - a, d)
+
+    return np.hypot(h, np.linalg.norm(c))
+
+
+def dist(p: npt.NDArray, q: npt.NDArray, rs: npt.NDArray) -> float:
+    x = p - q
+    return np.linalg.norm(
+        np.outer(np.dot(rs - q, x) / np.dot(x, x), x) + q - rs, axis=1
+    )
+
+
 class Axis(Enum):
     X = 1
     Y = 2
@@ -450,6 +475,8 @@ class Room:
 
     def trace(
         self,
+        orig_source: npt.NDArray,
+        listen_pos: npt.NDArray,
         **kwargs,
     ) -> typing.Tuple[typing.List[typing.List[Reflection]], typing.List[Arrival]]:
         order = kwargs.get("order", 10)
@@ -461,13 +488,8 @@ class Room:
         # TODO: kwarg source selection
         self._max_time = max_time
         self._min_gain = min_gain
+        source = orig_source
 
-        max_dist = self.engine.get_max_distance()
-
-        # TODO: factor in absorptive losses
-
-        l_speaker, r_speaker, listen_pos = self._lt.positions()
-        source = l_speaker
         source_normal = dir_from_points(source, listen_pos)
         direct_dist = np.linalg.norm(source - listen_pos)
 
@@ -497,8 +519,8 @@ class Room:
         mesh = self.mesh
         intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
         for j, shot in enumerate(shots):
+            source = orig_source
             temp_hits: typing.List[Reflection] = []
-            source = l_speaker
             total_dist: float = -direct_dist
             reflected_to_rfz = False
             intensity = 1
@@ -537,19 +559,25 @@ class Room:
                 if not found:
                     break
                     # raise RuntimeError
-                new_dir = dir - norm * 2 * dir.dot(norm)
 
                 temp_hits.append(
                     Reflection(new_source, wall, source, intensity, total_dist)
                 )
 
                 # Check whether this reflection passes within the RFZ
-                dist_from_crit = float(
-                    np.linalg.norm(
-                        np.cross(new_source - source, listen_pos - source)
-                        / np.linalg.norm(new_source - source)
-                    )
-                )
+                # dist_from_crit = float(
+                #     np.linalg.norm(np.cross(new_source - source, listen_pos - source))
+                #     / np.linalg.norm(new_source - source)
+                # )
+                # dist_from_crit = float(
+                #     np.linalg.norm(
+                #         # np.cross(new_source - source, listen_pos - source)
+                #         np.cross(new_source - source, source - listen_pos)
+                #         / np.linalg.norm(new_source - source)
+                #     )
+                # )
+                # dist_from_crit = lineseg_dist(new_source, source, listen_pos)
+                dist_from_crit = dist(new_source, source, listen_pos)
                 total_dist = total_dist + float(np.linalg.norm(new_source - source))
                 # Only check out to some number of ms
                 if total_dist / SPEED_OF_SOUND > max_time:
@@ -564,10 +592,10 @@ class Room:
                     if not isinstance(wall, Wall):
                         raise RuntimeError
                     print(
-                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist/ SPEED_OF_SOUND * 1000:.2f}ms"
+                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist + np.linalg.norm(listen_pos - new_source)/ SPEED_OF_SOUND * 1000:.2f}ms"
                     )
 
-                dir = new_dir
+                dir = dir - norm * 2 * dir.dot(norm)
                 source = new_source
             if reflected_to_rfz:
                 hits.append(temp_hits)
@@ -579,6 +607,9 @@ class Room:
     def draw_from_above(self):
         plt.scatter(
             self._lt.l_source()[0], self._lt.l_source()[1], marker="x", linewidth=8
+        )
+        plt.scatter(
+            self._lt.r_source()[0], self._lt.r_source()[1], marker="x", linewidth=8
         )
         circle = plt.Circle(
             (self._lt.listening_pos()[0], self._lt.listening_pos()[1]),
@@ -606,6 +637,9 @@ class Room:
     def draw_from_side(self):
         plt.scatter(
             self._lt.l_source()[0], self._lt.l_source()[2], marker="x", linewidth=8
+        )
+        plt.scatter(
+            self._lt.r_source()[0], self._lt.r_source()[2], marker="x", linewidth=8
         )
         circle = plt.Circle(
             (self._lt.listening_pos()[0], self._lt.listening_pos()[2]),
@@ -751,14 +785,17 @@ if __name__ == "__main__":
     room.listening_triangle(
         wall_name="Front",
         height=0.8,
-        dist_from_wall=0.2,
-        dist_from_center=1.2,
+        dist_from_wall=0.4,
+        dist_from_center=1.6,
         source=Source(),
-        listen_pos=2.6,
+        listen_pos=1.9,
         rfz_radius=0.25,
     )
+    l_speaker, r_speaker, _ = room._lt.positions()
     (hits, arrivals) = room.trace(
-        num_samples=10_000,
+        r_speaker,
+        room._lt.listening_pos(),
+        num_samples=10_00,
         max_time=0.04,
         min_gain=-20,
         order=50,
