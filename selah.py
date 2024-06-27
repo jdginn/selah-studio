@@ -22,7 +22,7 @@ namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/0
 #     "Arch": pra.materials_data["brickwork"],
 # }
 
-SPEED_OF_SOUND = 336
+SPEED_OF_SOUND = 343.0
 
 
 def db(gain: float) -> float:
@@ -38,13 +38,13 @@ class Axis(Enum):
 material_abs = {
     "brick": 0.04,
     "gypsum": 0.05,
-    "diffuser": 0.9,
+    "diffuser": 0.99,
     "wood": 0.1,
     "absorber": 0.95,
 }
 
 wall_materials = {
-    "Default": "wood",
+    "Default": "brick",
     "Ceiling": "brick",
     "Floor": "wood",
     "Street": "brick",
@@ -175,6 +175,7 @@ class ListeningTriangle:
         dist_from_wall: float,
         dist_from_center: float,
         source: Source,
+        rfz_radius: float,
         **kwargs,
     ) -> None:
         self._wall = wall
@@ -182,6 +183,7 @@ class ListeningTriangle:
         self.dist_from_wall = dist_from_wall
         self.dist_from_center = dist_from_center
         self.source = source
+        self.rfz_radius = rfz_radius
 
         if kwargs.get("listen_pos") is not None:
             self._listen_pos = kwargs["listen_pos"]
@@ -396,6 +398,7 @@ class Room:
         dist_from_wall: float,
         dist_from_center: float,
         source: Source,
+        rfz_radius: float,
         **kwargs,
     ) -> None:
         self._lt = ListeningTriangle(
@@ -404,9 +407,16 @@ class Room:
             dist_from_wall,
             dist_from_center,
             source,
+            rfz_radius,
             **kwargs,
         )
         self.walls = self.walls + self._lt.additional_walls(self.mesh)
+
+    def direct_distances(self) -> tuple[float, float]:
+        return (
+            float(np.linalg.norm(self._lt.l_source() - self._lt.listening_pos)),
+            float(np.linalg.norm(self._lt.r_source() - self._lt.listening_pos())),
+        )
 
     # Stub to provide type awareness
     #
@@ -425,11 +435,12 @@ class Room:
         return m
 
     def faces_to_wall(self, idx: int) -> Wall:
-        faces_to_wall: typing.List[Wall] = []
-        for w in self.walls:
-            for _ in w.mesh.faces:
-                faces_to_wall.append(w)
-        return faces_to_wall[idx]
+        if not hasattr(self, "_faces_to_wall"):
+            self._faces_to_wall: typing.List[Wall] = []
+            for w in self.walls:
+                for _ in w.mesh.faces:
+                    self._faces_to_wall.append(w)
+        return self._faces_to_wall[idx]
 
     def get_wall(self, name: str | int) -> Wall:
         for w in self.walls:
@@ -444,7 +455,6 @@ class Room:
         order = kwargs.get("order", 10)
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
-        rfz_radius = kwargs.get("rfz_radius", 0.3)
         num_samples = kwargs.get("num_samples", 10)
         vert_disp: float = kwargs.get("vert_disp", 50) / 360 * 2 * math.pi
         horiz_disp: float = kwargs.get("horiz_disp", 60) / 360 * 2 * math.pi
@@ -459,6 +469,7 @@ class Room:
         l_speaker, r_speaker, listen_pos = self._lt.positions()
         source = l_speaker
         source_normal = dir_from_points(source, listen_pos)
+        direct_dist = np.linalg.norm(source - listen_pos)
 
         shots: typing.List[Shot] = [Shot(source_normal)]
         h_steps = int(math.floor(math.sqrt(num_samples)))
@@ -488,7 +499,7 @@ class Room:
         for j, shot in enumerate(shots):
             temp_hits: typing.List[Reflection] = []
             source = l_speaker
-            total_dist: float = 0
+            total_dist: float = -direct_dist
             reflected_to_rfz = False
             intensity = 1
             wall: typing.Union[Wall, None] = None
@@ -539,23 +550,23 @@ class Room:
                         / np.linalg.norm(new_source - source)
                     )
                 )
+                total_dist = total_dist + float(np.linalg.norm(new_source - source))
                 # Only check out to some number of ms
                 if total_dist / SPEED_OF_SOUND > max_time:
                     break
                 # Only check out to some minimum gain
                 if db(intensity) < min_gain:
                     break
-                if dist_from_crit < rfz_radius and i > 1:
+                if dist_from_crit < self._lt.rfz_radius and i > 1:
                     # We only care about rays that reflect to the RFZ
                     reflected_to_rfz = True
-                    arrivals.append(Arrival(listen_pos, temp_hits))
+                    arrivals.append(Arrival(listen_pos, temp_hits.copy()))
                     if not isinstance(wall, Wall):
                         raise RuntimeError
                     print(
-                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist / SPEED_OF_SOUND * 1000:.2f}ms"
+                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist/ SPEED_OF_SOUND * 1000:.2f}ms"
                     )
 
-                total_dist = total_dist + float(np.linalg.norm(new_source - source))
                 dir = new_dir
                 source = new_source
             if reflected_to_rfz:
@@ -569,12 +580,19 @@ class Room:
         plt.scatter(
             self._lt.l_source()[0], self._lt.l_source()[1], marker="x", linewidth=8
         )
-        plt.scatter(
-            self._lt.listening_pos()[0],
-            self._lt.listening_pos()[1],
-            marker="h",
-            linewidth=12,
+        circle = plt.Circle(
+            (self._lt.listening_pos()[0], self._lt.listening_pos()[1]),
+            self._lt.rfz_radius,
+            fill=False,
+            color="dimgrey",
         )
+        plt.gca().add_patch(circle)
+        # plt.scatter(
+        #     self._lt.listening_pos()[0],
+        #     self._lt.listening_pos()[1],
+        #     marker="h",
+        #     linewidth=12,
+        # )
 
         plt.draw()
 
@@ -589,12 +607,19 @@ class Room:
         plt.scatter(
             self._lt.l_source()[0], self._lt.l_source()[2], marker="x", linewidth=8
         )
-        plt.scatter(
-            self._lt.listening_pos()[0],
-            self._lt.listening_pos()[2],
-            marker="h",
-            linewidth=12,
+        circle = plt.Circle(
+            (self._lt.listening_pos()[0], self._lt.listening_pos()[2]),
+            self._lt.rfz_radius,
+            fill=False,
+            color="dimgrey",
         )
+        plt.gca().add_patch(circle)
+        # plt.scatter(
+        #     self._lt.listening_pos()[0],
+        #     self._lt.listening_pos()[2],
+        #     marker="h",
+        #     linewidth=12,
+        # )
 
         plt.draw()
 
@@ -730,15 +755,15 @@ if __name__ == "__main__":
         dist_from_center=1.2,
         source=Source(),
         listen_pos=2.6,
+        rfz_radius=0.25,
     )
     (hits, arrivals) = room.trace(
         num_samples=10_000,
-        max_time=0.1,
-        min_gain=-10,
+        max_time=0.04,
+        min_gain=-20,
         order=50,
-        rfz_radius=0.2,
         horiz_disp=60,
-        vert_disp=40,
+        vert_disp=50,
     )
 
     plt.ion()
