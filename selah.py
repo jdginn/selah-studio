@@ -440,7 +440,7 @@ class Room:
     def direct_distances(self) -> tuple[float, float]:
         return (
             float(np.linalg.norm(self._lt.l_source() - self._lt.listening_pos)),
-            float(np.linalg.norm(self._lt.r_source() - self._lt.listening_pos())),
+            float(np.linalg.norm(self._lt.r_source() - self._lt.listening_pos)),
         )
 
     # Stub to provide type awareness
@@ -491,6 +491,7 @@ class Room:
         source = orig_source
 
         source_normal = dir_from_points(source, listen_pos)
+        print(f"norm: {source_normal}")
         direct_dist = np.linalg.norm(source - listen_pos)
 
         shots: typing.List[Shot] = [Shot(source_normal)]
@@ -513,6 +514,21 @@ class Room:
                 adjusted = source_normal + unscaled
                 rescaled = adjusted / np.linalg.norm(adjusted)
                 shots.append(Shot(rescaled))
+
+        fig = plt.figure()
+        ax1 = fig.add_subplot(2, 2, 1)
+        ax2 = fig.add_subplot(2, 2, 2)
+        ax1.set_xlim(0, 1)
+        ax1.set_ylim(-1, 1)
+        ax2.set_xlim(0, 1)
+        ax2.set_ylim(-1, 1)
+        ax1.plot([0, source_normal[0] * 2], [0, source_normal[1] * 2])
+        ax2.plot([0, source_normal[0] * 2], [0, source_normal[2] * 2])
+        for shot in shots:
+            ax1.plot([0, shot.dir[0]], [0, shot.dir[1]])
+        for shot in shots:
+            ax2.plot([0, shot.dir[0]], [0, shot.dir[2]])
+        plt.show(block=True)
 
         hits: typing.List[typing.List[Reflection]] = []
         arrivals: typing.List[Arrival] = []
@@ -592,7 +608,7 @@ class Room:
                     if not isinstance(wall, Wall):
                         raise RuntimeError
                     print(
-                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}->{new_source} at {total_dist + np.linalg.norm(listen_pos - new_source)/ SPEED_OF_SOUND * 1000:.2f}ms"
+                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}:{shot.dir}->{new_source} at {total_dist + np.linalg.norm(listen_pos - new_source)/ SPEED_OF_SOUND * 1000:.2f}ms"
                     )
 
                 dir = dir - norm * 2 * dir.dot(norm)
@@ -792,16 +808,28 @@ if __name__ == "__main__":
         rfz_radius=0.25,
     )
     l_speaker, r_speaker, _ = room._lt.positions()
-    (hits, arrivals) = room.trace(
-        r_speaker,
+    (_, l_arrivals) = room.trace(
+        l_speaker,
         room._lt.listening_pos(),
-        num_samples=10_00,
-        max_time=0.04,
+        num_samples=1_00,
+        max_time=50 / 1000,
         min_gain=-20,
         order=50,
         horiz_disp=60,
         vert_disp=50,
     )
+    (_, r_arrivals) = room.trace(
+        r_speaker,
+        room._lt.listening_pos(),
+        num_samples=1_00,
+        max_time=50 / 1000,
+        min_gain=-20,
+        order=50,
+        horiz_disp=60,
+        vert_disp=50,
+    )
+    arrivals = l_arrivals + r_arrivals
+    arrivals.sort(key=lambda a: a.total_dist)
 
     plt.ion()
     fig = plt.figure()
