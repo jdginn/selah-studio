@@ -483,8 +483,8 @@ class Room:
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
         num_samples = kwargs.get("num_samples", 10)
-        vert_disp: float = kwargs.get("vert_disp", 50) / 360 * 2 * math.pi
-        horiz_disp: float = kwargs.get("horiz_disp", 60) / 360 * 2 * math.pi
+        vert_disp: float = kwargs.get("vert_disp", 50)
+        horiz_disp: float = kwargs.get("horiz_disp", 60)
         # TODO: kwarg source selection
         self._max_time = max_time
         self._min_gain = min_gain
@@ -495,40 +495,50 @@ class Room:
         direct_dist = np.linalg.norm(source - listen_pos)
 
         shots: typing.List[Shot] = [Shot(source_normal)]
+        # These are in degrees
         h_steps = int(math.floor(math.sqrt(num_samples)))
-        h_step_size = 2 * horiz_disp / h_steps
+        h_step_size = horiz_disp / (h_steps - 1)
         v_steps = num_samples // h_steps
-        v_step_size = 2 * vert_disp / v_steps
+        v_step_size = vert_disp / (v_steps - 1)
         for v in range(v_steps):
-            # TODO: this is sampling is simply a horizontal stepping. It should probably
-            # be pseudorandom.
+            theta_v_deg = -vert_disp / 2 + v_step_size * v
+            theta_v = (theta_v_deg) / 180 * math.pi
+            pitch = np.array(
+                [
+                    [math.cos(theta_v), 0, -math.sin(theta_v)],
+                    [0, 1, 0],
+                    [math.sin(theta_v), 0, math.cos(theta_v)],
+                ]
+            )
             for h in range(h_steps):
-                unscaled = np.array(
-                    # TODO: for now this only works for sources on X-axis wall!
+                theta_h_deg = -horiz_disp / 2 + h_step_size * h
+                theta_h = (theta_h_deg) / 180 * math.pi
+                yaw = np.array(
                     [
-                        0,
-                        -horiz_disp / 2 + h_step_size * h,
-                        -vert_disp / 2 + v_step_size * v,
+                        [math.cos(theta_h), math.sin(theta_h), 0],
+                        [-math.sin(theta_h), math.cos(theta_h), 0],
+                        [0, 0, 1],
                     ]
                 )
-                adjusted = source_normal + unscaled
-                rescaled = adjusted / np.linalg.norm(adjusted)
-                shots.append(Shot(rescaled))
 
-        fig = plt.figure()
-        ax1 = fig.add_subplot(2, 2, 1)
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax1.set_xlim(0, 1)
-        ax1.set_ylim(-1, 1)
-        ax2.set_xlim(0, 1)
-        ax2.set_ylim(-1, 1)
-        ax1.plot([0, source_normal[0] * 2], [0, source_normal[1] * 2])
-        ax2.plot([0, source_normal[0] * 2], [0, source_normal[2] * 2])
-        for shot in shots:
-            ax1.plot([0, shot.dir[0]], [0, shot.dir[1]])
-        for shot in shots:
-            ax2.plot([0, shot.dir[0]], [0, shot.dir[2]])
-        plt.show(block=True)
+                new_dir = yaw.dot(pitch).dot(source_normal)
+                new_dir = new_dir / np.linalg.norm(new_dir)
+                shots.append(Shot(new_dir / np.linalg.norm(new_dir)))
+
+        # fig = plt.figure()
+        # ax1 = fig.add_subplot(2, 2, 1)
+        # ax2 = fig.add_subplot(2, 2, 2)
+        # ax1.set_xlim(0, 1)
+        # ax1.set_ylim(-1, 1)
+        # ax2.set_xlim(0, 1)
+        # ax2.set_ylim(-1, 1)
+        # ax1.plot([0, source_normal[0] * 2], [0, source_normal[1] * 2])
+        # ax2.plot([0, source_normal[0] * 2], [0, source_normal[2] * 2])
+        # for shot in shots:
+        #     ax1.plot([0, shot.dir[0]], [0, shot.dir[1]])
+        # for shot in shots:
+        #     ax2.plot([0, shot.dir[0]], [0, shot.dir[2]])
+        # plt.show(block=True)
 
         hits: typing.List[typing.List[Reflection]] = []
         arrivals: typing.List[Arrival] = []
@@ -802,16 +812,16 @@ if __name__ == "__main__":
         wall_name="Front",
         height=0.8,
         dist_from_wall=0.4,
-        dist_from_center=1.6,
+        dist_from_center=1.5,
         source=Source(),
-        listen_pos=1.9,
+        listen_pos=2.0,
         rfz_radius=0.25,
     )
     l_speaker, r_speaker, _ = room._lt.positions()
     (_, l_arrivals) = room.trace(
         l_speaker,
         room._lt.listening_pos(),
-        num_samples=1_00,
+        num_samples=1_000,
         max_time=50 / 1000,
         min_gain=-20,
         order=50,
@@ -821,7 +831,7 @@ if __name__ == "__main__":
     (_, r_arrivals) = room.trace(
         r_speaker,
         room._lt.listening_pos(),
-        num_samples=1_00,
+        num_samples=1_000,
         max_time=50 / 1000,
         min_gain=-20,
         order=50,
