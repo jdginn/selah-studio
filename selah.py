@@ -196,6 +196,7 @@ class ListeningTriangle:
         print(f"height: {height}")
         self._wall = wall
         self.height = height
+        self.speaker_height = kwargs.get("speaker_height", height)
         self.dist_from_wall = dist_from_wall
         self.dist_from_center = dist_from_center
         self.source = source
@@ -204,7 +205,7 @@ class ListeningTriangle:
         if kwargs.get("listen_pos") is not None:
             self._listen_pos = kwargs["listen_pos"]
 
-        self._axis, self._wall_pos = self._wall.pos(self.height)
+        self._axis, self._wall_pos = self._wall.pos(self.speaker_height)
         match self._axis:
             case Axis.X:
                 if self.dist_from_center > self._wall.width(Axis.Y) / 2.0:
@@ -220,7 +221,7 @@ class ListeningTriangle:
                     [
                         self._wall_pos + self.dist_from_wall,
                         p[1] - self.dist_from_center,
-                        self.height,
+                        self.speaker_height,
                     ],
                     dtype="float32",
                 )
@@ -237,7 +238,7 @@ class ListeningTriangle:
                     [
                         self._wall_pos + self.dist_from_wall,
                         p[1] + self.dist_from_center,
-                        self.height,
+                        self.speaker_height,
                     ],
                     dtype="float32",
                 )
@@ -302,7 +303,7 @@ class ListeningTriangle:
                         [
                             self._wall_pos + self.dist_from_wall,
                             p[1] - self.dist_from_center,
-                            self.height,
+                            self.speaker_height,
                         ],
                         dtype="float32",
                     ),
@@ -310,7 +311,7 @@ class ListeningTriangle:
                         [
                             self._wall_pos + self.dist_from_wall,
                             p[1] + self.dist_from_center,
-                            self.height,
+                            self.speaker_height,
                         ],
                         dtype="float32",
                     ),
@@ -460,6 +461,25 @@ class Room:
         raise RuntimeError
 
     # TODO: terminate reflections for each trace with the nearest point to listen pos, instead of the upcoming next reflection
+    # TODO monte carlo simulation:
+    # 1. automatically sweep features to search for optimal:
+    #       1. speaker distance from center
+    #       2. speaker distance from front wall
+    #       3. speaker height
+    #       4. listener distance from front wall
+    #       5. listener height
+    #       6. rear corner positions
+    #       7. rear corner inclination
+    # 2. limitations:
+    #       1. speaker collision with front wall
+    #       2. speaker obscures window
+    #       3. limited range for listener height
+    #       4. limited range for listener position on x axis (not too close to front or rear wall)
+    #       5. limited deviation from equilateral listening triangle
+    # 3. reward function:
+    #       1. maximize ITD (time until first reflection)
+    #       2. minimize intensity of first X reflections
+    #       3. minimize deviation from equilateral listening triangle
     def trace(
         self,
         orig_source: npt.NDArray,
@@ -633,6 +653,7 @@ class Room:
         plt.gca().add_patch(circle)
         plt.draw()
 
+        # sec = self.mesh.section((0, 0, 1), (0, 0, self._lt.speaker_height))
         sec = self.mesh.section((0, 0, 1), (0, 0, 0.5))
         if sec is None:
             raise RuntimeError
@@ -783,18 +804,19 @@ if __name__ == "__main__":
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
     room.listening_triangle(
         wall_name="Front",
-        height=1.3,
+        height=1.4,
+        speaker_height=2.1,
         dist_from_wall=0.4,
-        dist_from_center=1.5,
+        dist_from_center=0.8,
         source=Source(),
-        listen_pos=2.0,
+        # listen_pos=2.0,
         rfz_radius=0.25,
     )
     l_speaker, r_speaker, _ = room._lt.positions()
     (_, l_arrivals) = room.trace(
         l_speaker,
         room._lt.listening_pos(),
-        num_samples=10_000,
+        num_samples=5_000,
         max_time=50 / 1000,
         min_gain=-20,
         order=50,
@@ -804,7 +826,7 @@ if __name__ == "__main__":
     (_, r_arrivals) = room.trace(
         r_speaker,
         room._lt.listening_pos(),
-        num_samples=10_000,
+        num_samples=5_000,
         max_time=50 / 1000,
         min_gain=-20,
         order=50,
