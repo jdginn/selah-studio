@@ -193,6 +193,7 @@ class ListeningTriangle:
         rfz_radius: float,
         **kwargs,
     ) -> None:
+        print(f"height: {height}")
         self._wall = wall
         self.height = height
         self.dist_from_wall = dist_from_wall
@@ -248,7 +249,7 @@ class ListeningTriangle:
     def listening_pos(self) -> npt.NDArray:
         p = self._wall.center_pos()
         if hasattr(self, "_listen_pos"):
-            return p + [self._listen_pos, 0, 0]
+            return np.array([p[0] + self._listen_pos, p[1], self.height])
         match self._axis:
             case Axis.X:
                 return np.array(
@@ -458,6 +459,7 @@ class Room:
                 return w
         raise RuntimeError
 
+    # TODO: terminate reflections for each trace with the nearest point to listen pos, instead of the upcoming next reflection
     def trace(
         self,
         orig_source: npt.NDArray,
@@ -602,7 +604,8 @@ class Room:
                     if not isinstance(wall, Wall):
                         raise RuntimeError
                     print(
-                        f"Reflection from {wall.name}: {db(intensity):.1f}db {source}:{shot.dir}->{new_source} at {total_dist + np.linalg.norm(listen_pos - new_source)/ SPEED_OF_SOUND * 1000:.2f}ms"
+                        # f"Reflection from {wall.name}: {db(intensity):.1f}db {source}:{shot.dir}->{new_source} at {total_dist + np.linalg.norm(listen_pos - new_source)/ SPEED_OF_SOUND * 1000:.2f}ms"
+                        f"Reflection from {wall.name}: {db(intensity):.1f}db at {(total_dist + np.linalg.norm(listen_pos - new_source))/ SPEED_OF_SOUND * 1000:.2f}ms"
                     )
 
                 dir = dir - norm * 2 * dir.dot(norm)
@@ -780,7 +783,7 @@ if __name__ == "__main__":
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
     room.listening_triangle(
         wall_name="Front",
-        height=0.8,
+        height=1.3,
         dist_from_wall=0.4,
         dist_from_center=1.5,
         source=Source(),
@@ -791,7 +794,7 @@ if __name__ == "__main__":
     (_, l_arrivals) = room.trace(
         l_speaker,
         room._lt.listening_pos(),
-        num_samples=1_000,
+        num_samples=10_000,
         max_time=50 / 1000,
         min_gain=-20,
         order=50,
@@ -801,7 +804,7 @@ if __name__ == "__main__":
     (_, r_arrivals) = room.trace(
         r_speaker,
         room._lt.listening_pos(),
-        num_samples=1_000,
+        num_samples=10_000,
         max_time=50 / 1000,
         min_gain=-20,
         order=50,
