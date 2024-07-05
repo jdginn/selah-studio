@@ -4,7 +4,6 @@ import typing
 from dataclasses import dataclass
 from enum import Enum
 
-import IPython
 import trimesh
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -12,15 +11,6 @@ import numpy as np
 import numpy.typing as npt
 import pyroomacoustics as pra
 import pyroomacoustics.libroom as libroom
-
-namespace = {"schema": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
-
-# material_map = {
-#     # "Default": pra.materials_data["brick_wall_rough"],
-#     # "Arch": pra.materials_data["brick_wall_rough"],
-#     "Default": pra.materials_data["brickwork"],
-#     "Arch": pra.materials_data["brickwork"],
-# }
 
 SPEED_OF_SOUND = 343.0
 
@@ -292,9 +282,7 @@ class ListeningTriangle:
                 if len(vertices) > 3:
                     faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
                 faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
-            l_wall = Wall(
-                "Left Speaker Wall", trimesh.Trimesh(vertices=vertices, faces=faces)
-            )
+            l_wall = Wall(name, trimesh.Trimesh(vertices=vertices, faces=faces))
             return l_wall
 
         return [
@@ -444,9 +432,6 @@ class Room:
         )
 
     # Stub to provide type awareness
-    #
-    # Also, most of what we use pra_room for is accessing the internal engine, since we wrap
-    # most of the higher-level function in our own class here.
     @property
     def engine(self) -> libroom.Room:
         return self.pra_room.room_engine
@@ -491,7 +476,6 @@ class Room:
         source = orig_source
 
         source_normal = dir_from_points(source, listen_pos)
-        print(f"norm: {source_normal}")
         direct_dist = np.linalg.norm(source - listen_pos)
 
         shots: typing.List[Shot] = [Shot(source_normal)]
@@ -644,13 +628,6 @@ class Room:
             color="dimgrey",
         )
         plt.gca().add_patch(circle)
-        # plt.scatter(
-        #     self._lt.listening_pos()[0],
-        #     self._lt.listening_pos()[1],
-        #     marker="h",
-        #     linewidth=12,
-        # )
-
         plt.draw()
 
         sec = self.mesh.section((0, 0, 1), (0, 0, 0.5))
@@ -674,13 +651,6 @@ class Room:
             color="dimgrey",
         )
         plt.gca().add_patch(circle)
-        # plt.scatter(
-        #     self._lt.listening_pos()[0],
-        #     self._lt.listening_pos()[2],
-        #     marker="h",
-        #     linewidth=12,
-        # )
-
         plt.draw()
 
         sec = self.mesh.section((0, 1, 0), (0, 3, 0))
