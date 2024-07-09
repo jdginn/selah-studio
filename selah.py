@@ -4,6 +4,7 @@ import typing
 from dataclasses import dataclass
 from enum import Enum
 
+import IPython
 import trimesh
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -17,6 +18,10 @@ SPEED_OF_SOUND = 343.0
 
 def db(gain: float) -> float:
     return 10 * math.log10(gain)
+
+
+def from_db(gain: float) -> float:
+    return math.pow(10, gain / 10)
 
 
 def lineseg_dist(p: npt.NDArray, a: npt.NDArray, b: npt.NDArray) -> npt.NDArray:
@@ -171,9 +176,24 @@ class Wall:
 class Source:
     """Dispersions in degrees"""
 
-    def __init__(self, horiz_disp: float = 60, vert_disp: float = 20) -> None:
-        self.horiz_disp = horiz_disp
-        self.vert_disp = vert_disp
+    # Takes arguments of degrees to gain in dB
+    def __init__(
+        self,
+        horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100},
+        vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30},
+    ):
+        self._h_x = np.array(list(horiz_disp.keys()), np.float64)
+        self._h_y = np.array(list(horiz_disp.values()), np.float64)
+        self._v_x = np.array(list(vert_disp.keys()), np.float64)
+        self._v_y = np.array(list(vert_disp.values()), np.float64)
+
+    def intensity(self, vert_pos: float, horiz_pos: float) -> float:
+        val = np.interp(abs(vert_pos), self._v_x, self._v_y) + np.interp(
+            abs(horiz_pos), self._h_x, self._h_y
+        )
+        if not isinstance(val, float):
+            raise RuntimeError
+        return val
 
 
 def dir_from_points(p1: npt.NDArray, p2: npt.NDArray) -> npt.NDArray:
@@ -353,9 +373,7 @@ class Reflection:
 @dataclass
 class Shot:
     dir: npt.NDArray
-
-    def __hash__(self) -> int:
-        return f"x:{self.dir[0]}y:{self.dir[1]}z:{self.dir[2]}".__hash__()
+    intensity: float
 
 
 class Arrival:
@@ -482,7 +500,8 @@ class Room:
     #       3. minimize deviation from equilateral listening triangle
     def trace(
         self,
-        orig_source: npt.NDArray,
+        source: Source,
+        orig_source_pos: npt.NDArray,
         listen_pos: npt.NDArray,
         **kwargs,
     ) -> typing.Tuple[typing.List[typing.List[Reflection]], typing.List[Arrival]]:
@@ -490,17 +509,17 @@ class Room:
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
         num_samples = kwargs.get("num_samples", 10)
-        vert_disp: float = kwargs.get("vert_disp", 50)
-        horiz_disp: float = kwargs.get("horiz_disp", 60)
+        vert_disp: float = kwargs.get("vert_disp", 90)
+        horiz_disp: float = kwargs.get("horiz_disp", 90)
         # TODO: kwarg source selection
         self._max_time = max_time
         self._min_gain = min_gain
-        source = orig_source
+        source_pos = orig_source_pos
 
-        source_normal = dir_from_points(source, listen_pos)
-        direct_dist = np.linalg.norm(source - listen_pos)
+        source_normal = dir_from_points(source_pos, listen_pos)
+        direct_dist = np.linalg.norm(source_pos - listen_pos)
 
-        shots: typing.List[Shot] = [Shot(source_normal)]
+        shots: typing.List[Shot] = [Shot(source_normal, source.intensity(0, 0))]
         # These are in degrees
         h_steps = int(math.floor(math.sqrt(num_samples)))
         h_step_size = horiz_disp / (h_steps - 1)
@@ -529,7 +548,12 @@ class Room:
 
                 new_dir = yaw.dot(pitch).dot(source_normal)
                 new_dir = new_dir / np.linalg.norm(new_dir)
-                shots.append(Shot(new_dir / np.linalg.norm(new_dir)))
+                shots.append(
+                    Shot(
+                        new_dir / np.linalg.norm(new_dir),
+                        source.intensity(theta_v_deg, theta_h_deg),
+                    )
+                )
 
         # fig = plt.figure()
         # ax1 = fig.add_subplot(2, 2, 1)
@@ -551,11 +575,11 @@ class Room:
         mesh = self.mesh
         intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
         for j, shot in enumerate(shots):
-            source = orig_source
+            source_pos = orig_source_pos
             temp_hits: typing.List[Reflection] = []
             total_dist: float = -direct_dist
             reflected_to_rfz = False
-            intensity = 1
+            intensity = from_db(shot.intensity)
             wall: typing.Union[Wall, None] = None
 
             dir = shot.dir
@@ -565,7 +589,7 @@ class Room:
                 new_source: npt.NDArray = np.empty(3)
 
                 idx_tri, idx_ray, loc = intersector.intersects_id(
-                    [source],
+                    [source_pos],
                     [dir],
                     return_locations=True,
                     multiple_hits=True,
@@ -575,13 +599,13 @@ class Room:
                 found = False
 
                 def min_norm(e):
-                    return np.linalg.norm(source - e[0])
+                    return np.linalg.norm(source_pos - e[0])
 
                 for this_loc, tri_idx in sorted(
                     zip(loc, idx_tri), key=min_norm, reverse=False
                 ):
                     # Check here for multiple hits
-                    if np.linalg.norm(source - this_loc) > 0.001:
+                    if np.linalg.norm(source_pos - this_loc) > 0.001:
                         new_source = this_loc
                         norm = mesh.face_normals[tri_idx]
                         wall = self.faces_to_wall(tri_idx)
@@ -593,7 +617,7 @@ class Room:
                     # raise RuntimeError
 
                 temp_hits.append(
-                    Reflection(new_source, wall, source, intensity, total_dist)
+                    Reflection(new_source, wall, source_pos, intensity, total_dist)
                 )
 
                 # Check whether this reflection passes within the RFZ
@@ -609,8 +633,8 @@ class Room:
                 #     )
                 # )
                 # dist_from_crit = lineseg_dist(new_source, source, listen_pos)
-                dist_from_crit = dist(new_source, source, listen_pos)
-                total_dist = total_dist + float(np.linalg.norm(new_source - source))
+                dist_from_crit = dist(new_source, source_pos, listen_pos)
+                total_dist = total_dist + float(np.linalg.norm(new_source - source_pos))
                 # Only check out to some number of ms
                 if total_dist / SPEED_OF_SOUND > max_time:
                     break
@@ -629,7 +653,7 @@ class Room:
                     )
 
                 dir = dir - norm * 2 * dir.dot(norm)
-                source = new_source
+                source_pos = new_source
             if reflected_to_rfz:
                 hits.append(temp_hits)
 
@@ -805,18 +829,23 @@ if __name__ == "__main__":
     room.listening_triangle(
         wall_name="Front",
         height=1.4,
-        speaker_height=2.1,
+        speaker_height=1.4,
         dist_from_wall=0.4,
-        dist_from_center=0.8,
-        source=Source(),
+        dist_from_center=1.3,
+        source=Source(
+            vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
+            horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
+        ),
+        # source=Source(),
         # listen_pos=2.0,
         rfz_radius=0.25,
     )
     l_speaker, r_speaker, _ = room._lt.positions()
     (_, l_arrivals) = room.trace(
+        room._lt.source,
         l_speaker,
         room._lt.listening_pos(),
-        num_samples=5_000,
+        num_samples=50_00,
         max_time=50 / 1000,
         min_gain=-20,
         order=50,
@@ -824,9 +853,10 @@ if __name__ == "__main__":
         vert_disp=50,
     )
     (_, r_arrivals) = room.trace(
+        room._lt.source,
         r_speaker,
         room._lt.listening_pos(),
-        num_samples=5_000,
+        num_samples=50_00,
         max_time=50 / 1000,
         min_gain=-20,
         order=50,
