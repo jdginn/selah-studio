@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import IPython
+import pygad
 import trimesh
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -813,7 +814,9 @@ class Room:
         self.plot_arrivals(fig, arrivals, manually_advance)
 
 
-if __name__ == "__main__":
+def fitness_func(ga_instance, solution, solution_idx) -> float:
+    (height, speaker_height, dist_from_wall, dist_from_center) = solution
+
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
     parser.add_argument("--file", type=str, required=True, help="Path to 3mf file")
     parser.add_argument(
@@ -833,10 +836,10 @@ if __name__ == "__main__":
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
     room.listening_triangle(
         wall_name="Front",
-        height=1.4,
-        speaker_height=1.4,
-        dist_from_wall=0.4,
-        dist_from_center=1.3,
+        height=height,
+        speaker_height=speaker_height,
+        dist_from_wall=dist_from_wall,
+        dist_from_center=dist_from_center,
         source=Source(
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
@@ -850,7 +853,7 @@ if __name__ == "__main__":
         room._lt.source,
         l_speaker,
         room._lt.listening_pos(),
-        num_samples=50_00,
+        num_samples=5000,
         max_time=40 / 1000,
         min_gain=-15,
         order=10,
@@ -861,7 +864,7 @@ if __name__ == "__main__":
         room._lt.source,
         r_speaker,
         room._lt.listening_pos(),
-        num_samples=50_00,
+        num_samples=5000,
         max_time=40 / 1000,
         min_gain=-15,
         order=10,
@@ -870,8 +873,36 @@ if __name__ == "__main__":
     )
     arrivals = l_arrivals + r_arrivals
     arrivals.sort(key=lambda a: a.total_dist)
+    if len(arrivals) == 0:
+        return 0
+    ITD = arrivals[0].total_dist / SPEED_OF_SOUND * 1000
+    print(f"ITD: {ITD:.1f}")
+    return ITD
 
-    plt.ion()
-    fig = plt.figure()
-    room.plot_arrivals_interactive(fig, arrivals, False)
-    plt.show(block=True)
+
+if __name__ == "__main__":
+    # (height, speaker_height, dist_from_wall, dist_from_center) = solution
+    gene_space = [
+        [1.4],
+        [0.4, 1.8],
+        [0.2, 0.8],
+        [0.4, 1.8],
+    ]
+    ga_instance = pygad.GA(
+        num_generations=8,
+        num_parents_mating=4,
+        fitness_func=fitness_func,
+        sol_per_pop=4,
+        num_genes=4,
+        mutation_percent_genes=50,
+        gene_space=gene_space,
+    )
+    ga_instance.run()
+
+    solution, solution_fitness, solution_idx = ga_instance.best_solution()
+    print("Parameters of the best solution : {solution}".format(solution=solution))
+    print(
+        "Fitness value of the best solution = {solution_fitness}".format(
+            solution_fitness=solution_fitness
+        )
+    )
