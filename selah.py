@@ -173,6 +173,10 @@ class Wall:
                 return max_z - min_z
 
 
+kh420_horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100}
+kh420_vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30}
+
+
 class Source:
     """Dispersions in degrees"""
 
@@ -277,7 +281,8 @@ class ListeningTriangle:
                     [
                         self._wall_pos
                         + self.dist_from_wall
-                        + (self.dist_from_center * math.sqrt(3)),
+                        + (self.dist_from_center * math.sqrt(3))
+                        - 0.38,  # magic number from Rod Gervais
                         p[1],
                         self.height,
                     ],
@@ -404,25 +409,25 @@ class Room:
     def __init__(self, walls: typing.List[Wall]):
         self.walls = walls
 
-        mat = pra.Material(energy_absorption=0.1, scattering=0.2)
-        _pra_walls = []
-        for w in walls:
-            # w.simplify()
-            for tri in w.mesh.triangles:
-                pw = pra.Wall(
-                    tri.T,
-                    mat.energy_absorption["coeffs"],
-                    mat.scattering["coeffs"],
-                )
-                pw.name = w.name
-                _pra_walls.append(pw)
-        self.pra_room = pra.Room(
-            _pra_walls,
-            fs=44100,
-            max_order=3,
-            ray_tracing=True,
-            air_absorption=False,
-        )
+        # mat = pra.Material(energy_absorption=0.1, scattering=0.2)
+        # _pra_walls = []
+        # for w in walls:
+        #     # w.simplify()
+        #     for tri in w.mesh.triangles:
+        #         pw = pra.Wall(
+        #             tri.T,
+        #             mat.energy_absorption["coeffs"],
+        #             mat.scattering["coeffs"],
+        #         )
+        #         pw.name = w.name
+        #         _pra_walls.append(pw)
+        # self.pra_room = pra.Room(
+        #     _pra_walls,
+        #     fs=44100,
+        #     max_order=3,
+        #     ray_tracing=True,
+        #     air_absorption=False,
+        # )
 
     def listening_triangle(
         self,
@@ -846,9 +851,9 @@ if __name__ == "__main__":
         l_speaker,
         room._lt.listening_pos(),
         num_samples=50_00,
-        max_time=50 / 1000,
-        min_gain=-20,
-        order=50,
+        max_time=40 / 1000,
+        min_gain=-15,
+        order=10,
         horiz_disp=60,
         vert_disp=50,
     )
@@ -857,9 +862,9 @@ if __name__ == "__main__":
         r_speaker,
         room._lt.listening_pos(),
         num_samples=50_00,
-        max_time=50 / 1000,
-        min_gain=-20,
-        order=50,
+        max_time=40 / 1000,
+        min_gain=-15,
+        order=10,
         horiz_disp=60,
         vert_disp=50,
     )
