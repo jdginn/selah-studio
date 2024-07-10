@@ -814,7 +814,8 @@ class Room:
 
 
 def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
-    (height, speaker_height, dist_from_wall, dist_from_center) = solution
+    (height, speaker_height, dist_from_wall, dist_from_center, num_samples) = solution
+    num_samples = int(num_samples)
 
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
     parser.add_argument("--file", type=str, required=True, help="Path to 3mf file")
@@ -847,12 +848,16 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         # listen_pos=2.0,
         rfz_radius=0.25,
     )
-    l_speaker, r_speaker, _ = room._lt.positions()
+    l_speaker, r_speaker, listen_pos = room._lt.positions()
+    if listen_pos[0] <= 1.8:
+        return room, []
+    if listen_pos[0] >= 2.8:
+        return room, []
     (_, l_arrivals) = room.trace(
         room._lt.source,
         l_speaker,
         room._lt.listening_pos(),
-        num_samples=500,
+        num_samples=num_samples,
         max_time=40 / 1000,
         min_gain=-15,
         order=10,
@@ -861,7 +866,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         room._lt.source,
         r_speaker,
         room._lt.listening_pos(),
-        num_samples=500,
+        num_samples=num_samples,
         max_time=40 / 1000,
         min_gain=-15,
         order=10,
@@ -871,6 +876,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
 
 
 def fitness_func(ga_instance, solution, solution_idx) -> float:
+    # print("Simulating with parameters: {solution}".format(solution=solution))
     _, arrivals = get_arrivals(solution)
     arrivals.sort(key=lambda a: a.total_dist)
     if len(arrivals) == 0:
@@ -881,21 +887,27 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
 
 
 if __name__ == "__main__":
-    # (height, speaker_height, dist_from_wall, dist_from_center) = solution
+    # (height, speaker_height, dist_from_wall, dist_from_center, num_samples) = solution
     gene_space = [
         [1.4],
-        [0.4, 1.8],
-        [0.2, 0.8],
-        [0.4, 1.8],
+        {"low": 1.2, "high": 2.0},
+        {"low": 0.2, "high": 0.8},
+        {"low": 0.8, "high": 2.0},
+        [2000],
     ]
     ga_instance = pygad.GA(
-        num_generations=8,
-        num_parents_mating=4,
+        num_generations=20,
+        num_parents_mating=8,
         fitness_func=fitness_func,
-        sol_per_pop=4,
-        num_genes=4,
-        mutation_percent_genes=50,
+        sol_per_pop=10,
+        num_genes=len(gene_space),
+        # mutation_percent_genes=100,
+        mutation_probability=0.8,
         gene_space=gene_space,
+        # gene_type=float,
+        crossover_type="two_points",
+        crossover_probability=0.7,
+        parallel_processing=["process", 10],
     )
     ga_instance.run()
 
