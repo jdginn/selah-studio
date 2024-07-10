@@ -2,6 +2,8 @@ import argparse
 import math
 import typing
 from dataclasses import dataclass
+import dataclasses
+import collections
 from enum import Enum
 
 import IPython
@@ -513,7 +515,7 @@ class Room:
         order = kwargs.get("order", 10)
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
-        num_samples = kwargs.get("num_samples", 10)
+        num_samples = int(kwargs.get("num_samples", 10))
         vert_disp: float = kwargs.get("vert_disp", 90)
         horiz_disp: float = kwargs.get("horiz_disp", 90)
         # TODO: kwarg source selection
@@ -814,8 +816,9 @@ class Room:
 
 
 def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
-    (height, speaker_height, dist_from_wall, dist_from_center, num_samples) = solution
-    num_samples = int(num_samples)
+    print(f"solution: {solution}")
+    params = training_parameters(*solution)
+    print(f"Simulating with {params}")
 
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
     parser.add_argument("--file", type=str, required=True, help="Path to 3mf file")
@@ -836,10 +839,10 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()])
     room.listening_triangle(
         wall_name="Front",
-        height=height,
-        speaker_height=speaker_height,
-        dist_from_wall=dist_from_wall,
-        dist_from_center=dist_from_center,
+        height=params.height,
+        speaker_height=params.speaker_height,
+        dist_from_wall=params.dist_from_wall,
+        dist_from_center=params.dist_from_center,
         source=Source(
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
@@ -849,15 +852,15 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         rfz_radius=0.25,
     )
     l_speaker, r_speaker, listen_pos = room._lt.positions()
-    if listen_pos[0] <= 1.8:
+    if listen_pos[0] <= params.min_listen_pos:
         return room, []
-    if listen_pos[0] >= 2.8:
+    if listen_pos[0] >= params.max_listen_pos:
         return room, []
     (_, l_arrivals) = room.trace(
         room._lt.source,
         l_speaker,
         room._lt.listening_pos(),
-        num_samples=num_samples,
+        num_samples=params.num_samples,
         max_time=40 / 1000,
         min_gain=-15,
         order=10,
@@ -866,7 +869,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         room._lt.source,
         r_speaker,
         room._lt.listening_pos(),
-        num_samples=num_samples,
+        num_samples=params.num_samples,
         max_time=40 / 1000,
         min_gain=-15,
         order=10,
@@ -886,24 +889,42 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
     return ITD
 
 
+@dataclass
+class training_parameters:
+    height: typing.Union[float, dict[str, float]] = 1.4
+    speaker_height: typing.Union[float, dict[str, float]] = 1.4
+    dist_from_wall: typing.Union[float, dict[str, float]] = 0.3
+    dist_from_center: typing.Union[float, dict[str, float]] = 0.9
+    max_listen_pos: typing.Union[float, dict[str, float]] = 2.4
+    min_listen_pos: typing.Union[float, dict[str, float]] = 1.3
+    num_samples: int = 2000
+
+    def aslist(self):
+        retlist = []
+        for name, val in self.__dict__.items():
+            if isinstance(val, dict):
+                retlist.append(val)
+            else:
+                retlist.append([val])
+        return retlist
+
+
 if __name__ == "__main__":
-    # (height, speaker_height, dist_from_wall, dist_from_center, num_samples) = solution
-    gene_space = [
-        [1.4],
-        {"low": 1.2, "high": 2.0},
-        {"low": 0.2, "high": 0.8},
-        {"low": 0.8, "high": 2.0},
-        [2000],
-    ]
+    gene_space = training_parameters(
+        speaker_height={"low": 0.8, "high": 1.9},
+        dist_from_center={"low": 0.8, "high": 1.9},
+        dist_from_wall={"low": 0.3, "high": 0.4},
+    )
+    print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
         num_generations=20,
         num_parents_mating=8,
         fitness_func=fitness_func,
         sol_per_pop=10,
-        num_genes=len(gene_space),
+        num_genes=len(gene_space.aslist()),
         # mutation_percent_genes=100,
         mutation_probability=0.8,
-        gene_space=gene_space,
+        gene_space=gene_space.aslist(),
         # gene_type=float,
         crossover_type="two_points",
         crossover_probability=0.7,
