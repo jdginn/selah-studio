@@ -227,6 +227,7 @@ class ListeningTriangle:
         self.dist_from_center = dist_from_center
         self.source = source
         self.rfz_radius = rfz_radius
+        self._deviation = kwargs.get("deviation", 0)
 
         if kwargs.get("listen_pos") is not None:
             self._listen_pos = kwargs["listen_pos"]
@@ -284,6 +285,7 @@ class ListeningTriangle:
                         self._wall_pos
                         + self.dist_from_wall
                         + (self.dist_from_center * math.sqrt(3))
+                        + self._deviation
                         - 0.38,  # magic number from Rod Gervais
                         p[1],
                         self.height,
@@ -816,9 +818,7 @@ class Room:
 
 
 def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
-    print(f"solution: {solution}")
     params = training_parameters(*solution)
-    print(f"Simulating with {params}")
 
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
     parser.add_argument("--file", type=str, required=True, help="Path to 3mf file")
@@ -895,6 +895,7 @@ class training_parameters:
     speaker_height: typing.Union[float, dict[str, float]] = 1.4
     dist_from_wall: typing.Union[float, dict[str, float]] = 0.3
     dist_from_center: typing.Union[float, dict[str, float]] = 0.9
+    deviation_from_equilateral: typing.Union[float, dict[str, float]] = 0.0
     max_listen_pos: typing.Union[float, dict[str, float]] = 2.4
     min_listen_pos: typing.Union[float, dict[str, float]] = 1.3
     num_samples: int = 2000
@@ -914,6 +915,7 @@ if __name__ == "__main__":
         speaker_height={"low": 0.8, "high": 1.9},
         dist_from_center={"low": 0.8, "high": 1.9},
         dist_from_wall={"low": 0.3, "high": 0.4},
+        deviation_from_equilateral={"low": -0.3, "high": 0.3},
     )
     print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
@@ -925,7 +927,6 @@ if __name__ == "__main__":
         # mutation_percent_genes=100,
         mutation_probability=0.8,
         gene_space=gene_space.aslist(),
-        # gene_type=float,
         crossover_type="two_points",
         crossover_probability=0.7,
         parallel_processing=["process", 10],
