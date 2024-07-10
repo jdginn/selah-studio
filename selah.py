@@ -924,17 +924,16 @@ if __name__ == "__main__":
         fitness_func=fitness_func,
         sol_per_pop=10,
         num_genes=len(gene_space.aslist()),
-        # mutation_percent_genes=100,
-        mutation_probability=0.8,
         gene_space=gene_space.aslist(),
+        mutation_probability=0.8,
         crossover_type="two_points",
-        crossover_probability=0.7,
+        crossover_probability=0.3,
         parallel_processing=["process", 10],
     )
     ga_instance.run()
 
     solution, solution_fitness, solution_idx = ga_instance.best_solution()
-    print("Parameters of the best solution : {solution}".format(solution=solution))
+    print(f"Parameters of the best solution : {training_parameters(*solution)}")
     print(
         "Fitness value of the best solution = {solution_fitness}".format(
             solution_fitness=solution_fitness
