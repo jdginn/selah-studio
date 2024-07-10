@@ -218,7 +218,6 @@ class ListeningTriangle:
         rfz_radius: float,
         **kwargs,
     ) -> None:
-        print(f"height: {height}")
         self._wall = wall
         self.height = height
         self.speaker_height = kwargs.get("speaker_height", height)
@@ -653,10 +652,10 @@ class Room:
                     arrivals.append(Arrival(listen_pos, temp_hits.copy()))
                     if not isinstance(wall, Wall):
                         raise RuntimeError
-                    print(
-                        # f"Reflection from {wall.name}: {db(intensity):.1f}db {source}:{shot.dir}->{new_source} at {total_dist + np.linalg.norm(listen_pos - new_source)/ SPEED_OF_SOUND * 1000:.2f}ms"
-                        f"Reflection from {wall.name}: {db(intensity):.1f}db at {(total_dist + np.linalg.norm(listen_pos - new_source))/ SPEED_OF_SOUND * 1000:.2f}ms"
-                    )
+                    # print(
+                    #     # f"Reflection from {wall.name}: {db(intensity):.1f}db {source}:{shot.dir}->{new_source} at {total_dist + np.linalg.norm(listen_pos - new_source)/ SPEED_OF_SOUND * 1000:.2f}ms"
+                    #     f"Reflection from {wall.name}: {db(intensity):.1f}db at {(total_dist + np.linalg.norm(listen_pos - new_source))/ SPEED_OF_SOUND * 1000:.2f}ms"
+                    # )
 
                 dir = dir - norm * 2 * dir.dot(norm)
                 source_pos = new_source
@@ -814,7 +813,7 @@ class Room:
         self.plot_arrivals(fig, arrivals, manually_advance)
 
 
-def fitness_func(ga_instance, solution, solution_idx) -> float:
+def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
     (height, speaker_height, dist_from_wall, dist_from_center) = solution
 
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
@@ -853,29 +852,30 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
         room._lt.source,
         l_speaker,
         room._lt.listening_pos(),
-        num_samples=5000,
+        num_samples=500,
         max_time=40 / 1000,
         min_gain=-15,
         order=10,
-        horiz_disp=60,
-        vert_disp=50,
     )
     (_, r_arrivals) = room.trace(
         room._lt.source,
         r_speaker,
         room._lt.listening_pos(),
-        num_samples=5000,
+        num_samples=500,
         max_time=40 / 1000,
         min_gain=-15,
         order=10,
-        horiz_disp=60,
-        vert_disp=50,
     )
     arrivals = l_arrivals + r_arrivals
+    return room, arrivals
+
+
+def fitness_func(ga_instance, solution, solution_idx) -> float:
+    _, arrivals = get_arrivals(solution)
     arrivals.sort(key=lambda a: a.total_dist)
     if len(arrivals) == 0:
         return 0
-    ITD = arrivals[0].total_dist / SPEED_OF_SOUND * 1000
+    ITD = float(arrivals[0].total_dist / SPEED_OF_SOUND * 1000)
     print(f"ITD: {ITD:.1f}")
     return ITD
 
@@ -906,3 +906,9 @@ if __name__ == "__main__":
             solution_fitness=solution_fitness
         )
     )
+
+    room, arrivals = get_arrivals(solution)
+    plt.ion()
+    fig = plt.figure()
+    room.plot_arrivals_interactive(fig, arrivals, False)
+    plt.show(block=True)
