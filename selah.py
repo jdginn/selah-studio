@@ -176,6 +176,26 @@ class Wall:
                 return max_z - min_z
 
 
+def build_wall_from_point(
+    name: str, mesh: trimesh.Trimesh, point: npt.NDArray, normal: npt.NDArray
+) -> Wall:
+    mp = trimesh.intersections.mesh_plane(
+        mesh,
+        normal,
+        point,
+    )
+    vertices: typing.List[npt.NDArray] = [point]
+    faces: typing.List[npt.NDArray] = []
+    for line in mp:
+        vertices.append(line[0])
+        vertices.append(line[1])
+        if len(vertices) > 3:
+            faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
+        faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
+    l_wall = Wall(name, trimesh.Trimesh(vertices=vertices, faces=faces))
+    return l_wall
+
+
 kh420_horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100}
 kh420_vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30}
 
@@ -183,16 +203,16 @@ kh420_vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30}
 class Source:
     """Dispersions in degrees"""
 
-    # Takes arguments of degrees to gain in dB
+    # Takes arguments mapping degrees to gain in dB
     def __init__(
         self,
         horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100},
         vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30},
     ):
-        self._h_x = np.array(list(horiz_disp.keys()), np.float64)
-        self._h_y = np.array(list(horiz_disp.values()), np.float64)
-        self._v_x = np.array(list(vert_disp.keys()), np.float64)
-        self._v_y = np.array(list(vert_disp.values()), np.float64)
+        self._h_x = np.array(list(horiz_disp.keys()), np.float32)
+        self._h_y = np.array(list(horiz_disp.values()), np.float32)
+        self._v_x = np.array(list(vert_disp.keys()), np.float32)
+        self._v_y = np.array(list(vert_disp.values()), np.float32)
 
     def intensity(self, vert_pos: float, horiz_pos: float) -> float:
         val = np.interp(abs(vert_pos), self._v_x, self._v_y) + np.interp(
@@ -296,30 +316,6 @@ class ListeningTriangle:
                 raise RuntimeError
             case Axis.Z:
                 raise RuntimeError
-
-    def additional_walls(self, mesh: trimesh.Trimesh) -> typing.List[Wall]:
-        def build_wall_from_point(name: str, point: npt.NDArray) -> Wall:
-            normal = dir_from_points(point, self.listening_pos())
-            mp = trimesh.intersections.mesh_plane(
-                mesh,
-                normal,
-                point,
-            )
-            vertices: typing.List[npt.NDArray] = [point]
-            faces: typing.List[npt.NDArray] = []
-            for line in mp:
-                vertices.append(line[0])
-                vertices.append(line[1])
-                if len(vertices) > 3:
-                    faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
-                faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
-            l_wall = Wall(name, trimesh.Trimesh(vertices=vertices, faces=faces))
-            return l_wall
-
-        return [
-            build_wall_from_point("left speaker wall", self.l_source()),
-            build_wall_from_point("right speaker wall", self.r_source()),
-        ]
 
     def positions(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
         p = self._wall.center_pos()
@@ -452,7 +448,23 @@ class Room:
             rfz_radius,
             **kwargs,
         )
-        self.walls = self.walls + self._lt.additional_walls(self.mesh)
+        l_source, r_source, listen_pos = self._lt.positions()
+        self.walls.append(
+            build_wall_from_point(
+                "left speaker wall",
+                self.mesh,
+                self._lt.l_source(),
+                dir_from_points(l_source, listen_pos),
+            )
+        )
+        self.walls.append(
+            build_wall_from_point(
+                "right speaker wall",
+                self.mesh,
+                self._lt.r_source(),
+                dir_from_points(r_source, listen_pos),
+            )
+        )
 
     def direct_distances(self) -> tuple[float, float]:
         return (
@@ -490,21 +502,25 @@ class Room:
     # TODO: terminate reflections for each trace with the nearest point to listen pos, instead of the upcoming next reflection
     # TODO monte carlo simulation:
     # 1. automatically sweep features to search for optimal:
-    #       1. speaker distance from center
-    #       2. speaker distance from front wall
-    #       3. speaker height
-    #       4. listener distance from front wall
-    #       5. listener height
-    #       6. rear corner positions
-    #       7. rear corner inclination
+    #       [X] speaker distance from center
+    #       [X] speaker distance from front wall
+    #       [X] speaker height
+    #       [X] listener distance from front wall
+    #       [X] listener height
+    #       [ ] ceiling diffuser height
+    #       [ ] ceiling diffuser width
+    #       [ ] ceiling diffuser length
+    #       [ ] ceiling diffuser position (x axis)
+    #       [ ] rear corner positions
+    #       [ ] rear corner inclination
     # 2. limitations:
-    #       1. speaker collision with front wall
-    #       2. speaker obscures window
-    #       3. limited range for listener height
-    #       4. limited range for listener position on x axis (not too close to front or rear wall)
-    #       5. limited deviation from equilateral listening triangle
+    #       [ ] speaker collision with front wall
+    #       [ ] speaker obscures window
+    #       [X] limited range for listener height
+    #       [X] limited range for listener position on x axis (not too close to front or rear wall)
+    #       [X] limited deviation from equilateral listening triangle
     # 3. reward function:
-    #       1. maximize ITD (time until first reflection)
+    #       [X] maximize ITD (time until first reflection)
     #       2. minimize intensity of first X reflections
     #       3. minimize deviation from equilateral listening triangle
     def trace(
@@ -564,21 +580,6 @@ class Room:
                     )
                 )
 
-        # fig = plt.figure()
-        # ax1 = fig.add_subplot(2, 2, 1)
-        # ax2 = fig.add_subplot(2, 2, 2)
-        # ax1.set_xlim(0, 1)
-        # ax1.set_ylim(-1, 1)
-        # ax2.set_xlim(0, 1)
-        # ax2.set_ylim(-1, 1)
-        # ax1.plot([0, source_normal[0] * 2], [0, source_normal[1] * 2])
-        # ax2.plot([0, source_normal[0] * 2], [0, source_normal[2] * 2])
-        # for shot in shots:
-        #     ax1.plot([0, shot.dir[0]], [0, shot.dir[1]])
-        # for shot in shots:
-        #     ax2.plot([0, shot.dir[0]], [0, shot.dir[2]])
-        # plt.show(block=True)
-
         hits: typing.List[typing.List[Reflection]] = []
         arrivals: typing.List[Arrival] = []
         mesh = self.mesh
@@ -630,18 +631,6 @@ class Room:
                 )
 
                 # Check whether this reflection passes within the RFZ
-                # dist_from_crit = float(
-                #     np.linalg.norm(np.cross(new_source - source, listen_pos - source))
-                #     / np.linalg.norm(new_source - source)
-                # )
-                # dist_from_crit = float(
-                #     np.linalg.norm(
-                #         # np.cross(new_source - source, listen_pos - source)
-                #         np.cross(new_source - source, source - listen_pos)
-                #         / np.linalg.norm(new_source - source)
-                #     )
-                # )
-                # dist_from_crit = lineseg_dist(new_source, source, listen_pos)
                 dist_from_crit = dist(new_source, source_pos, listen_pos)
                 total_dist = total_dist + float(np.linalg.norm(new_source - source_pos))
                 # Only check out to some number of ms
@@ -879,7 +868,6 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
 
 
 def fitness_func(ga_instance, solution, solution_idx) -> float:
-    # print("Simulating with parameters: {solution}".format(solution=solution))
     _, arrivals = get_arrivals(solution)
     arrivals.sort(key=lambda a: a.total_dist)
     if len(arrivals) == 0:
@@ -919,7 +907,7 @@ if __name__ == "__main__":
     )
     print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
-        num_generations=20,
+        num_generations=2,
         num_parents_mating=8,
         fitness_func=fitness_func,
         sol_per_pop=10,
