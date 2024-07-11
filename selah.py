@@ -525,10 +525,10 @@ class Room:
     #       [X] speaker height
     #       [X] listener distance from front wall
     #       [X] listener height
-    #       [ ] ceiling diffuser height
-    #       [ ] ceiling diffuser width
-    #       [ ] ceiling diffuser length
-    #       [ ] ceiling diffuser position (x axis)
+    #       [X] ceiling diffuser height
+    #       [X] ceiling diffuser width
+    #       [X] ceiling diffuser length
+    #       [X] ceiling diffuser position (x axis)
     #       [ ] rear corner positions
     #       [ ] rear corner inclination
     # 2. limitations:
@@ -539,8 +539,8 @@ class Room:
     #       [X] limited deviation from equilateral listening triangle
     # 3. reward function:
     #       [X] maximize ITD (time until first reflection)
-    #       2. minimize intensity of first X reflections
-    #       3. minimize deviation from equilateral listening triangle
+    #       [ ] minimize intensity of first X reflections
+    #       [ ] minimize deviation from equilateral listening triangle
     def trace(
         self,
         source: Source,
@@ -938,7 +938,7 @@ if __name__ == "__main__":
     )
     print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
-        num_generations=10,
+        num_generations=1,
         num_parents_mating=8,
         fitness_func=fitness_func,
         sol_per_pop=10,
