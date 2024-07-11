@@ -6,8 +6,8 @@ import dataclasses
 import collections
 from enum import Enum
 
-import IPython
 import pygad
+import pprint
 import trimesh
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -192,8 +192,7 @@ def build_wall_from_point(
         if len(vertices) > 3:
             faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
         faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
-    l_wall = Wall(name, trimesh.Trimesh(vertices=vertices, faces=faces))
-    return l_wall
+    return Wall(name, trimesh.Trimesh(vertices=vertices, faces=faces))
 
 
 kh420_horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100}
@@ -465,6 +464,25 @@ class Room:
                 dir_from_points(r_source, listen_pos),
             )
         )
+
+    def ceiling_diffuser(
+        self, height: float, length: float, width: float, position: float
+    ) -> None:
+        floor = self.get_wall("Floor")
+        centroid = floor.mesh.centroid + np.array([0, 0, height])
+        l = np.array([length, 0, 0])
+        w = np.array([0, width, 0])
+        vertices = [
+            centroid - l / 2 - w / 2,
+            centroid - l / 2 + w / 2,
+            centroid + l / 2 - w / 2,
+            centroid + l / 2 + w / 2,
+        ]
+        faces = np.array([[0, 1, 2], [1, 2, 3]])
+        self.walls.append(
+            Wall("Ceiling Diffuser", trimesh.Trimesh(vertices=vertices, faces=faces))
+        )
+        pass
 
     def direct_distances(self) -> tuple[float, float]:
         return (
@@ -836,8 +854,6 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),
-        # source=Source(),
-        # listen_pos=2.0,
         rfz_radius=0.25,
     )
     l_speaker, r_speaker, listen_pos = room._lt.positions()
@@ -845,6 +861,12 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         return room, []
     if listen_pos[0] >= params.max_listen_pos:
         return room, []
+    room.ceiling_diffuser(
+        params.ceiling_diffuser_height,
+        params.ceiling_diffuser_length,
+        params.ceiling_diffuser_width,
+        params.ceiling_diffuser_position,
+    )
     (_, l_arrivals) = room.trace(
         room._lt.source,
         l_speaker,
@@ -886,6 +908,10 @@ class training_parameters:
     deviation_from_equilateral: typing.Union[float, dict[str, float]] = 0.0
     max_listen_pos: typing.Union[float, dict[str, float]] = 2.4
     min_listen_pos: typing.Union[float, dict[str, float]] = 1.3
+    ceiling_diffuser_height: typing.Union[float, dict[str, float]] = 2.3
+    ceiling_diffuser_length: typing.Union[float, dict[str, float]] = 1.0
+    ceiling_diffuser_width: typing.Union[float, dict[str, float]] = 1.0
+    ceiling_diffuser_position: typing.Union[float, dict[str, float]] = 1.5
     num_samples: int = 2000
 
     def aslist(self):
@@ -904,10 +930,15 @@ if __name__ == "__main__":
         dist_from_center={"low": 0.8, "high": 1.9},
         dist_from_wall={"low": 0.3, "high": 0.4},
         deviation_from_equilateral={"low": -0.3, "high": 0.3},
+        ceiling_diffuser_height={"low": 2.0, "high": 2.75},
+        ceiling_diffuser_width={"low": 0.5, "high": 2.75},
+        ceiling_diffuser_length={"low": 0.1, "high": 2.75},
+        ceiling_diffuser_position={"low": 0.0, "high": 2.5},
+        num_samples=2000,
     )
     print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
-        num_generations=2,
+        num_generations=10,
         num_parents_mating=8,
         fitness_func=fitness_func,
         sol_per_pop=10,
@@ -916,19 +947,17 @@ if __name__ == "__main__":
         mutation_probability=0.8,
         crossover_type="two_points",
         crossover_probability=0.3,
-        parallel_processing=["process", 10],
+        parallel_processing=["process", 12],
     )
     ga_instance.run()
 
     solution, solution_fitness, solution_idx = ga_instance.best_solution()
-    print(f"Parameters of the best solution : {training_parameters(*solution)}")
-    print(
-        "Fitness value of the best solution = {solution_fitness}".format(
-            solution_fitness=solution_fitness
-        )
-    )
+    pprint.pprint(f"Parameters of the best solution : {training_parameters(*solution)}")
+    pprint.pprint(f"Fitness value of the best solution = {solution_fitness}")
 
     room, arrivals = get_arrivals(solution)
+    # room.mesh.show()
+    # IPython.embed()
     plt.ion()
     fig = plt.figure()
     room.plot_arrivals_interactive(fig, arrivals, False)
