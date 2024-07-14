@@ -484,6 +484,76 @@ class Room:
         )
         pass
 
+    def corner_wall(
+        self,
+        name: str,
+        wall_names: typing.Tuple[str, str],
+        x_pos: float = 0.25,
+        y_pos: float = 0.25,
+        height: float = 0,
+        inclination: float = 0,
+        **kwargs,
+    ) -> Wall:
+        # TODO: support using walls to define this
+        # if x_bound in kwargs:
+        #     if x_pos > x_bound:
+        #         raise RuntimeError
+        # if y_bound in kwargs:
+        #     if y_pos > y_bound:
+        #         raise RuntimeError
+        x_wall, y_wall = wall_names
+        xw = self.get_wall(x_wall)
+        yw = self.get_wall(y_wall)
+        shared_vertices = []
+        for i, v in enumerate(xw.mesh.vertices):
+            for j, vv in enumerate(yw.mesh.vertices):
+                if np.all(np.array(v) == np.array(vv)):
+                    shared_vertices.append((i, j, v))
+        x_faces: npt.NDArray
+        y_faces: npt.NDArray
+        shared_vertex_at_height: npt.NDArray
+        for i, j, v in shared_vertices:
+            if v[2] == 0:
+                shared_vertex_at_height = v
+                x_faces = xw.mesh.faces[xw.mesh.vertex_faces[i]]
+                y_faces = yw.mesh.faces[yw.mesh.vertex_faces[j]]
+                break
+        xdir = npt.NDArray
+        ydir = npt.NDArray
+        for f in x_faces:
+            for i in f:
+                v = xw.vertices[i]
+                if not np.all(v == shared_vertex_at_height) and v[2] == 0:
+                    xdir = dir_from_points(shared_vertex_at_height, v)
+                    break
+        for f in y_faces:
+            for i in f:
+                v = yw.vertices[i]
+                if not np.all(v == shared_vertex_at_height) and v[2] == 0:
+                    ydir = dir_from_points(shared_vertex_at_height, v)
+                    break
+        xpoint = shared_vertex_at_height + x_pos * xdir
+        ypoint = shared_vertex_at_height + y_pos * ydir
+        midpoint = xpoint + (ypoint - xpoint) / 2
+        i_rad = inclination * np.pi / 180
+        pitch = np.array(
+            [
+                [math.cos(i_rad), 0, -math.sin(i_rad)],
+                [0, 1, 0],
+                [math.sin(i_rad), 0, math.cos(i_rad)],
+            ]
+        )
+        norm = dir_from_points(shared_vertex_at_height, midpoint).dot(pitch) + np.array(
+            [
+                0,
+                0,
+                height,
+            ]
+        )
+        w = build_wall_from_point(name, self.mesh, midpoint, norm)
+        self.walls.append(w)
+        return w
+
     def direct_distances(self) -> tuple[float, float]:
         return (
             float(np.linalg.norm(self._lt.l_source() - self._lt.listening_pos)),
@@ -861,6 +931,38 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         return room, []
     if listen_pos[0] >= params.max_listen_pos:
         return room, []
+    room.corner_wall(
+        "Corner A",
+        ("Back Wall - Street", "Street Wall Back"),
+        params.cornerA_x_pos,
+        params.cornerA_y_pos,
+        0,
+        params.cornerA_inclination,
+    )
+    room.corner_wall(
+        "Corner B",
+        ("Back Wall - Door", "Door Wall - Back"),
+        params.cornerA_x_pos,
+        params.cornerA_y_pos,
+        0,
+        params.cornerA_inclination,
+    )
+    room.corner_wall(
+        "Corner C",
+        ("Back Wall - Street", "Street Wall Back"),
+        params.cornerC_x_pos,
+        params.cornerC_y_pos,
+        params.cornerC_height,
+        params.cornerC_inclination,
+    )
+    room.corner_wall(
+        "Corner D",
+        ("Back Wall - Door", "Door Wall - Back"),
+        params.cornerD_x_pos,
+        params.cornerD_y_pos,
+        params.cornerD_height,
+        params.cornerD_inclination,
+    )
     room.ceiling_diffuser(
         params.ceiling_diffuser_height,
         params.ceiling_diffuser_length,
@@ -912,6 +1014,28 @@ class training_parameters:
     ceiling_diffuser_length: typing.Union[float, dict[str, float]] = 1.0
     ceiling_diffuser_width: typing.Union[float, dict[str, float]] = 1.0
     ceiling_diffuser_position: typing.Union[float, dict[str, float]] = 1.5
+    cornerA_x_pos: typing.Union[float, dict[str, float]] = 0.25
+    cornerA_y_pos: typing.Union[float, dict[str, float]] = 0.25
+    cornerA_inclination: typing.Union[float, dict[str, float]] = 10
+    cornerB_x_pos: typing.Union[float, dict[str, float]] = 0.25
+    cornerB_y_pos: typing.Union[float, dict[str, float]] = 0.25
+    cornerB_inclination: typing.Union[float, dict[str, float]] = 10
+    cornerC_x_pos: typing.Union[float, dict[str, float]] = 0.25
+    cornerC_y_pos: typing.Union[float, dict[str, float]] = 0.25
+    cornerC_height: typing.Union[float, dict[str, float]] = 1.8
+    cornerC_inclination: typing.Union[float, dict[str, float]] = -10
+    cornerD_x_pos: typing.Union[float, dict[str, float]] = 0.25
+    cornerD_y_pos: typing.Union[float, dict[str, float]] = 0.25
+    cornerD_inclination: typing.Union[float, dict[str, float]] = -10
+    cornerD_height: typing.Union[float, dict[str, float]] = 1.8
+    # cornerA_wall_names: typing.Tuple[str, str] = (
+    #     "Back wall - Street",
+    #     "Street Wall Back",
+    # )
+    # cornerB_wall_names: typing.Tuple[str, str] = (
+    #     "Back wall - Door",
+    #     "Door Wall - Back",
+    # )
     num_samples: int = 2000
 
     def aslist(self):
@@ -930,24 +1054,41 @@ if __name__ == "__main__":
         dist_from_center={"low": 0.8, "high": 1.9},
         dist_from_wall={"low": 0.3, "high": 0.4},
         deviation_from_equilateral={"low": -0.3, "high": 0.3},
-        ceiling_diffuser_height={"low": 2.0, "high": 2.75},
+        ceiling_diffuser_height={"low": 2.3, "high": 2.75},
         ceiling_diffuser_width={"low": 0.5, "high": 2.75},
         ceiling_diffuser_length={"low": 0.1, "high": 2.75},
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
+        cornerA_x_pos={"low": 0.0, "high": 1.3},
+        cornerA_y_pos={"low": 0.0, "high": 0.72},
+        cornerA_inclination={"low": 0, "high": 60},
+        cornerB_x_pos={"low": 0.0, "high": 1.44},
+        cornerB_y_pos={"low": 0.0, "high": 0.46},
+        cornerB_inclination={"low": 0, "high": 60},
+        cornerC_x_pos={"low": 0.0, "high": 1.3},
+        cornerC_y_pos={"low": 0.0, "high": 0.72},
+        cornerC_inclination={"low": -20, "high": 0},
+        cornerC_height={"low": 1.6, "high": 2.5},
+        cornerD_x_pos={"low": 0.0, "high": 1.44},
+        cornerD_y_pos={"low": 0.0, "high": 0.46},
+        cornerD_inclination={"low": -20, "high": 0},
+        cornerD_height={"low": 1.6, "high": 2.5},
         num_samples=2000,
     )
     print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
-        num_generations=1,
-        num_parents_mating=8,
+        num_generations=40,
+        num_parents_mating=4,
         fitness_func=fitness_func,
-        sol_per_pop=10,
+        sol_per_pop=24,
         num_genes=len(gene_space.aslist()),
         gene_space=gene_space.aslist(),
         mutation_probability=0.8,
-        crossover_type="two_points",
-        crossover_probability=0.3,
-        parallel_processing=["process", 12],
+        parent_selection_type="tournament",
+        K_tournament=4,
+        crossover_type="single_point",
+        crossover_probability=0.5,
+        keep_elitism=8,
+        parallel_processing=["process", 24],
     )
     ga_instance.run()
 
@@ -957,7 +1098,6 @@ if __name__ == "__main__":
 
     room, arrivals = get_arrivals(solution)
     # room.mesh.show()
-    # IPython.embed()
     plt.ion()
     fig = plt.figure()
     room.plot_arrivals_interactive(fig, arrivals, False)
