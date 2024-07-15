@@ -19,6 +19,18 @@ import pyroomacoustics.libroom as libroom
 SPEED_OF_SOUND = 343.0
 
 
+class SelahStudioException(RuntimeError):
+    pass
+
+
+class ObscuresWindow(SelahStudioException):
+    """Indicates an attempt to create a wall that obscures the window"""
+
+
+class ListeningPositionError(SelahStudioException):
+    """Indicates the listening position has been placed outside the valid area"""
+
+
 def db(gain: float) -> float:
     return 10 * math.log10(gain)
 
@@ -81,6 +93,9 @@ wall_materials = {
     "Back Diffuser": "diffuser",
     "Ceiling Diffuser": "diffuser",
     "Spooky Curtain": "absorber",
+    "Door Front": "absorber",
+    "Door Back": "absorber",
+    "Door Door": "absorber",
 }
 
 
@@ -193,6 +208,13 @@ def build_wall_from_point(
             faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
         faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
     return Wall(name, trimesh.Trimesh(vertices=vertices, faces=faces))
+
+
+def test_intersection(
+    mesh: trimesh.Trimesh, point: npt.NDArray, normal: npt.NDArray
+) -> bool:
+    mp = trimesh.intersections.mesh_plane(mesh, normal, point)
+    return len(mp) > 0
 
 
 kh420_horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100}
@@ -344,6 +366,7 @@ class ListeningTriangle:
                             self._wall_pos
                             + self.dist_from_wall
                             + (self.dist_from_center * math.sqrt(3)),
+                            +self._deviation - 0.38,  # magic number from Rod Gervais
                             p[1],
                             self.height,
                         ],
@@ -447,12 +470,26 @@ class Room:
             rfz_radius,
             **kwargs,
         )
-        l_source, r_source, listen_pos = self._lt.positions()
+        l_source = self._lt.l_source()
+        r_source = self._lt.r_source()
+        listen_pos = self._lt.listening_pos()
+        for w in self.walls:
+            if w.name == "Window":
+                if test_intersection(
+                    w.mesh, l_source, dir_from_points(l_source, listen_pos)
+                ):
+                    raise ObscuresWindow("Left wall obscures window")
+        for w in self.walls:
+            if w.name == "Window":
+                if test_intersection(
+                    w.mesh, r_source, dir_from_points(r_source, listen_pos)
+                ):
+                    raise ObscuresWindow("Right wall obscures window")
         self.walls.append(
             build_wall_from_point(
                 "left speaker wall",
                 self.mesh,
-                self._lt.l_source(),
+                l_source,
                 dir_from_points(l_source, listen_pos),
             )
         )
@@ -460,7 +497,7 @@ class Room:
             build_wall_from_point(
                 "right speaker wall",
                 self.mesh,
-                self._lt.r_source(),
+                r_source,
                 dir_from_points(r_source, listen_pos),
             )
         )
@@ -894,7 +931,7 @@ class Room:
         scene.export(filename, "stl")
 
 
-def get_arrivals(solution) -> tuple[Room, typing.List[Arrival], bool]:
+def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
     params = training_parameters(*solution)
 
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
@@ -920,19 +957,18 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival], bool]:
         speaker_height=params.speaker_height,
         dist_from_wall=params.dist_from_wall,
         dist_from_center=params.dist_from_center,
+        deviation=params.deviation_from_equilateral,
         source=Source(
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),
         rfz_radius=0.25,
     )
-    l_speaker, r_speaker, listen_pos = room._lt.positions()
+    listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
-        print("listen_pos too close to front of room")
-        return room, [], False
+        raise ListeningPositionError("Too close to front wall")
     if listen_pos[0] >= params.max_listen_pos:
-        print("listen_pos too close to back of room")
-        return room, [], False
+        raise ListeningPositionError("Too close to back wall")
     room.corner_wall(
         "Corner A",
         ("Back Wall - Street", "Street Wall Back"),
@@ -949,22 +985,22 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival], bool]:
         0,
         params.cornerB_inclination,
     )
-    # room.corner_wall(
-    #     "Corner C",
-    #     ("Back Wall - Street", "Street Wall Back"),
-    #     params.cornerC_x_pos,
-    #     params.cornerC_y_pos,
-    #     params.cornerC_height,
-    #     params.cornerC_inclination,
-    # )
-    # room.corner_wall(
-    #     "Corner D",
-    #     ("Back Wall - Door", "Door Wall - Back"),
-    #     params.cornerD_x_pos,
-    #     params.cornerD_y_pos,
-    #     params.cornerD_height,
-    #     params.cornerD_inclination,
-    # )
+    room.corner_wall(
+        "Corner C",
+        ("Back Wall - Street", "Street Wall Back"),
+        params.cornerC_x_pos,
+        params.cornerC_y_pos,
+        params.cornerC_height,
+        params.cornerC_inclination,
+    )
+    room.corner_wall(
+        "Corner D",
+        ("Back Wall - Door", "Door Wall - Back"),
+        params.cornerD_x_pos,
+        params.cornerD_y_pos,
+        params.cornerD_height,
+        params.cornerD_inclination,
+    )
     room.ceiling_diffuser(
         params.ceiling_diffuser_height,
         params.ceiling_diffuser_length,
@@ -973,7 +1009,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival], bool]:
     )
     (_, l_arrivals) = room.trace(
         room._lt.source,
-        l_speaker,
+        room._lt.l_source(),
         room._lt.listening_pos(),
         num_samples=params.num_samples,
         max_time=40 / 1000,
@@ -982,7 +1018,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival], bool]:
     )
     (_, r_arrivals) = room.trace(
         room._lt.source,
-        r_speaker,
+        room._lt.r_source(),
         room._lt.listening_pos(),
         num_samples=params.num_samples,
         max_time=params.max_time,
@@ -990,14 +1026,15 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival], bool]:
         order=10,
     )
     arrivals = l_arrivals + r_arrivals
-    return room, arrivals, True
+    return room, arrivals
 
 
 def fitness_func(ga_instance, solution, solution_idx) -> float:
     params = training_parameters(*solution)
-    _, arrivals, ok = get_arrivals(solution)
-    if not ok:
-        print("Invalid solution")
+    try:
+        _, arrivals = get_arrivals(solution)
+    except SelahStudioException as ex:
+        print(f"Invalid solution: {ex}")
         return 0
     arrivals.sort(key=lambda a: a.total_dist)
     if len(arrivals) == 0:
@@ -1059,18 +1096,18 @@ class training_parameters:
 if __name__ == "__main__":
 
     gene_space = training_parameters(
-        speaker_height={"low": 0.8, "high": 1.9},
+        speaker_height={"low": 1.9, "high": 2.4},
         # dist_from_center={"low": 1.1, "high": 1.9},
-        dist_from_center={"low": 0.8, "high": 1.9},
-        dist_from_wall={"low": 0.2, "high": 0.4},
-        deviation_from_equilateral={"low": -0.7, "high": 0.7},
+        dist_from_center={"low": 0.6, "high": 1.0},
+        dist_from_wall={"low": 0.2, "high": 0.5},
+        deviation_from_equilateral={"low": -1.0, "high": 1.0},
         ceiling_diffuser_height={"low": 2.3, "high": 2.75},
-        ceiling_diffuser_width={"low": 0.5, "high": 2.75},
-        ceiling_diffuser_length={"low": 0.1, "high": 2.75},
+        ceiling_diffuser_width={"low": 1.0, "high": 2.75},
+        ceiling_diffuser_length={"low": 1.0, "high": 2.75},
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
         cornerA_x_pos={"low": 1.3, "high": 1.3},
         cornerA_y_pos={"low": 0.72, "high": 0.72},
-        cornerA_inclination={"low": -50, "high": 0},
+        cornerA_inclination={"low": 0, "high": 60},
         cornerB_x_pos={"low": 1.44, "high": 1.44},
         cornerB_y_pos={"low": 0.46, "high": 0.46},
         cornerB_inclination={"low": 0, "high": 60},
@@ -1087,21 +1124,24 @@ if __name__ == "__main__":
     )
     print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
-        num_generations=6,
+        num_generations=3,
         num_parents_mating=4,
         fitness_func=fitness_func,
         sol_per_pop=24,
         num_genes=len(gene_space.aslist()),
         gene_space=gene_space.aslist(),
         mutation_probability=0.4,
-        # parent_selection_type="tournament",
-        # K_tournament=4,
+        parent_selection_type="tournament",
+        K_tournament=4,
         crossover_type="two_points",
         crossover_probability=0.7,
         keep_elitism=8,
         parallel_processing=["process", 24],
+        save_solutions=True,
     )
     ga_instance.run()
+    ga_instance.plot_fitness()
+    ga_instance.plot_genes()
 
     solution, solution_fitness, solution_idx = ga_instance.best_solution()
     pprint.pprint(f"Parameters of the best solution : {training_parameters(*solution)}")
