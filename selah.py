@@ -495,12 +495,6 @@ class Room:
         **kwargs,
     ) -> Wall:
         # TODO: support using walls to define this
-        # if x_bound in kwargs:
-        #     if x_pos > x_bound:
-        #         raise RuntimeError
-        # if y_bound in kwargs:
-        #     if y_pos > y_bound:
-        #         raise RuntimeError
         x_wall, y_wall = wall_names
         xw = self.get_wall(x_wall)
         yw = self.get_wall(y_wall)
@@ -511,10 +505,10 @@ class Room:
                     shared_vertices.append((i, j, v))
         x_faces: npt.NDArray
         y_faces: npt.NDArray
-        shared_vertex_at_height: npt.NDArray
+        shared_vertex_at_zero: npt.NDArray
         for i, j, v in shared_vertices:
             if v[2] == 0:
-                shared_vertex_at_height = v
+                shared_vertex_at_zero = v
                 x_faces = xw.mesh.faces[xw.mesh.vertex_faces[i]]
                 y_faces = yw.mesh.faces[yw.mesh.vertex_faces[j]]
                 break
@@ -523,18 +517,23 @@ class Room:
         for f in x_faces:
             for i in f:
                 v = xw.vertices[i]
-                if not np.all(v == shared_vertex_at_height) and v[2] == 0:
-                    xdir = dir_from_points(shared_vertex_at_height, v)
+                if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
+                    xdir = dir_from_points(shared_vertex_at_zero, v)
                     break
         for f in y_faces:
             for i in f:
                 v = yw.vertices[i]
-                if not np.all(v == shared_vertex_at_height) and v[2] == 0:
-                    ydir = dir_from_points(shared_vertex_at_height, v)
+                if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
+                    ydir = dir_from_points(shared_vertex_at_zero, v)
                     break
-        xpoint = shared_vertex_at_height + x_pos * xdir
-        ypoint = shared_vertex_at_height + y_pos * ydir
-        midpoint = xpoint + (ypoint - xpoint) / 2
+        # print(f"Corner {name}")
+        # print(f"Shared point: {shared_vertex_at_zero}")
+        xpoint = shared_vertex_at_zero + x_pos * xdir
+        # print(f"xpoint: {xpoint}")
+        ypoint = shared_vertex_at_zero + y_pos * ydir
+        # print(f"ypoint: {ypoint}")
+        midpoint = xpoint + (ypoint - xpoint) / 2 + np.array([0, 0, height])
+        # print(f"midpoint: {midpoint}")
         i_rad = inclination * np.pi / 180
         pitch = np.array(
             [
@@ -543,13 +542,10 @@ class Room:
                 [math.sin(i_rad), 0, math.cos(i_rad)],
             ]
         )
-        norm = dir_from_points(shared_vertex_at_height, midpoint).dot(pitch) + np.array(
-            [
-                0,
-                0,
-                height,
-            ]
-        )
+        # norm = np.array([(midpoint - xpoint)[1], -(midpoint - xpoint)[0], 0]).dot(pitch)
+        line_dir = dir_from_points(xpoint, midpoint)
+        norm = np.array([line_dir[1], -line_dir[0], 0]).dot(pitch)
+        # print(f"norm: {norm}")
         w = build_wall_from_point(name, self.mesh, midpoint, norm)
         self.walls.append(w)
         return w
@@ -764,7 +760,7 @@ class Room:
         plt.draw()
 
         # sec = self.mesh.section((0, 0, 1), (0, 0, self._lt.speaker_height))
-        sec = self.mesh.section((0, 0, 1), (0, 0, 0.5))
+        sec = self.mesh.section((0, 0, 1), (0, 0, 0))
         if sec is None:
             raise RuntimeError
         outline = sec.to_planar()[0]
@@ -893,8 +889,12 @@ class Room:
         fig.canvas.mpl_connect("key_press_event", on_press)
         self.plot_arrivals(fig, arrivals, manually_advance)
 
+    def write(self, filename: str):
+        scene = trimesh.Scene(self.mesh)
+        scene.export(filename, "stl")
 
-def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
+
+def get_arrivals(solution) -> tuple[Room, typing.List[Arrival], bool]:
     params = training_parameters(*solution)
 
     parser = argparse.ArgumentParser(description="Process room from 3mf file")
@@ -928,9 +928,11 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
     )
     l_speaker, r_speaker, listen_pos = room._lt.positions()
     if listen_pos[0] <= params.min_listen_pos:
-        return room, []
+        print("listen_pos too close to front of room")
+        return room, [], False
     if listen_pos[0] >= params.max_listen_pos:
-        return room, []
+        print("listen_pos too close to back of room")
+        return room, [], False
     room.corner_wall(
         "Corner A",
         ("Back Wall - Street", "Street Wall Back"),
@@ -942,27 +944,27 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
     room.corner_wall(
         "Corner B",
         ("Back Wall - Door", "Door Wall - Back"),
-        params.cornerA_x_pos,
-        params.cornerA_y_pos,
+        params.cornerB_x_pos,
+        params.cornerB_y_pos,
         0,
-        params.cornerA_inclination,
+        params.cornerB_inclination,
     )
-    room.corner_wall(
-        "Corner C",
-        ("Back Wall - Street", "Street Wall Back"),
-        params.cornerC_x_pos,
-        params.cornerC_y_pos,
-        params.cornerC_height,
-        params.cornerC_inclination,
-    )
-    room.corner_wall(
-        "Corner D",
-        ("Back Wall - Door", "Door Wall - Back"),
-        params.cornerD_x_pos,
-        params.cornerD_y_pos,
-        params.cornerD_height,
-        params.cornerD_inclination,
-    )
+    # room.corner_wall(
+    #     "Corner C",
+    #     ("Back Wall - Street", "Street Wall Back"),
+    #     params.cornerC_x_pos,
+    #     params.cornerC_y_pos,
+    #     params.cornerC_height,
+    #     params.cornerC_inclination,
+    # )
+    # room.corner_wall(
+    #     "Corner D",
+    #     ("Back Wall - Door", "Door Wall - Back"),
+    #     params.cornerD_x_pos,
+    #     params.cornerD_y_pos,
+    #     params.cornerD_height,
+    #     params.cornerD_inclination,
+    # )
     room.ceiling_diffuser(
         params.ceiling_diffuser_height,
         params.ceiling_diffuser_length,
@@ -983,21 +985,26 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         r_speaker,
         room._lt.listening_pos(),
         num_samples=params.num_samples,
-        max_time=40 / 1000,
+        max_time=params.max_time,
         min_gain=-15,
         order=10,
     )
     arrivals = l_arrivals + r_arrivals
-    return room, arrivals
+    return room, arrivals, True
 
 
 def fitness_func(ga_instance, solution, solution_idx) -> float:
-    _, arrivals = get_arrivals(solution)
+    params = training_parameters(*solution)
+    _, arrivals, ok = get_arrivals(solution)
+    if not ok:
+        print("Invalid solution")
+        return 0
     arrivals.sort(key=lambda a: a.total_dist)
     if len(arrivals) == 0:
-        return 0
+        print(f"HOLY GRAIL: {params.max_time * 1000}")
+        return params.max_time * 1000
     ITD = float(arrivals[0].total_dist / SPEED_OF_SOUND * 1000)
-    print(f"ITD: {ITD:.1f}")
+    print(f"ITD: {ITD:.1f}, height: {params.ceiling_diffuser_height:.1f}")
     return ITD
 
 
@@ -1035,8 +1042,9 @@ class training_parameters:
     # cornerB_wall_names: typing.Tuple[str, str] = (
     #     "Back wall - Door",
     #     "Door Wall - Back",
-    # )
-    num_samples: int = 2000
+    # 7
+    num_samples: int = 20
+    max_time: float = 80 / 1000
 
     def aslist(self):
         retlist = []
@@ -1049,44 +1057,47 @@ class training_parameters:
 
 
 if __name__ == "__main__":
+
     gene_space = training_parameters(
         speaker_height={"low": 0.8, "high": 1.9},
+        # dist_from_center={"low": 1.1, "high": 1.9},
         dist_from_center={"low": 0.8, "high": 1.9},
-        dist_from_wall={"low": 0.3, "high": 0.4},
-        deviation_from_equilateral={"low": -0.3, "high": 0.3},
+        dist_from_wall={"low": 0.2, "high": 0.4},
+        deviation_from_equilateral={"low": -0.7, "high": 0.7},
         ceiling_diffuser_height={"low": 2.3, "high": 2.75},
         ceiling_diffuser_width={"low": 0.5, "high": 2.75},
         ceiling_diffuser_length={"low": 0.1, "high": 2.75},
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
-        cornerA_x_pos={"low": 0.0, "high": 1.3},
-        cornerA_y_pos={"low": 0.0, "high": 0.72},
-        cornerA_inclination={"low": 0, "high": 60},
-        cornerB_x_pos={"low": 0.0, "high": 1.44},
-        cornerB_y_pos={"low": 0.0, "high": 0.46},
+        cornerA_x_pos={"low": 1.3, "high": 1.3},
+        cornerA_y_pos={"low": 0.72, "high": 0.72},
+        cornerA_inclination={"low": -50, "high": 0},
+        cornerB_x_pos={"low": 1.44, "high": 1.44},
+        cornerB_y_pos={"low": 0.46, "high": 0.46},
         cornerB_inclination={"low": 0, "high": 60},
-        cornerC_x_pos={"low": 0.0, "high": 1.3},
-        cornerC_y_pos={"low": 0.0, "high": 0.72},
-        cornerC_inclination={"low": -20, "high": 0},
+        cornerC_x_pos={"low": 0.3, "high": 1.3},
+        cornerC_y_pos={"low": 0.3, "high": 0.72},
+        cornerC_inclination={"low": -50, "high": 0},
         cornerC_height={"low": 1.6, "high": 2.5},
-        cornerD_x_pos={"low": 0.0, "high": 1.44},
-        cornerD_y_pos={"low": 0.0, "high": 0.46},
-        cornerD_inclination={"low": -20, "high": 0},
+        cornerD_x_pos={"low": 0.3, "high": 1.44},
+        cornerD_y_pos={"low": 0.3, "high": 0.46},
+        cornerD_inclination={"low": -60, "high": 0},
         cornerD_height={"low": 1.6, "high": 2.5},
         num_samples=2000,
+        max_time=40 / 1000,
     )
     print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
-        num_generations=40,
+        num_generations=6,
         num_parents_mating=4,
         fitness_func=fitness_func,
         sol_per_pop=24,
         num_genes=len(gene_space.aslist()),
         gene_space=gene_space.aslist(),
-        mutation_probability=0.8,
-        parent_selection_type="tournament",
-        K_tournament=4,
-        crossover_type="single_point",
-        crossover_probability=0.5,
+        mutation_probability=0.4,
+        # parent_selection_type="tournament",
+        # K_tournament=4,
+        crossover_type="two_points",
+        crossover_probability=0.7,
         keep_elitism=8,
         parallel_processing=["process", 24],
     )
