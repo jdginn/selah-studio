@@ -96,6 +96,8 @@ wall_materials = {
     "Door Front": "absorber",
     "Door Back": "absorber",
     "Door Door": "absorber",
+    "Corner A": "absorber",
+    "Corner B": "absorber",
 }
 
 
@@ -962,7 +964,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),
-        rfz_radius=0.25,
+        rfz_radius=0.2,
     )
     listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
@@ -985,22 +987,22 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         0,
         params.cornerB_inclination,
     )
-    room.corner_wall(
-        "Corner C",
-        ("Back Wall - Street", "Street Wall Back"),
-        params.cornerC_x_pos,
-        params.cornerC_y_pos,
-        params.cornerC_height,
-        params.cornerC_inclination,
-    )
-    room.corner_wall(
-        "Corner D",
-        ("Back Wall - Door", "Door Wall - Back"),
-        params.cornerD_x_pos,
-        params.cornerD_y_pos,
-        params.cornerD_height,
-        params.cornerD_inclination,
-    )
+    # room.corner_wall(
+    #     "Corner C",
+    #     ("Back Wall - Street", "Street Wall Back"),
+    #     params.cornerC_x_pos,
+    #     params.cornerC_y_pos,
+    #     params.cornerC_height,
+    #     params.cornerC_inclination,
+    # )
+    # room.corner_wall(
+    #     "Corner D",
+    #     ("Back Wall - Door", "Door Wall - Back"),
+    #     params.cornerD_x_pos,
+    #     params.cornerD_y_pos,
+    #     params.cornerD_height,
+    #     params.cornerD_inclination,
+    # )
     room.ceiling_diffuser(
         params.ceiling_diffuser_height,
         params.ceiling_diffuser_length,
@@ -1064,22 +1066,14 @@ class training_parameters:
     cornerB_x_pos: typing.Union[float, dict[str, float]] = 0.25
     cornerB_y_pos: typing.Union[float, dict[str, float]] = 0.25
     cornerB_inclination: typing.Union[float, dict[str, float]] = 10
-    cornerC_x_pos: typing.Union[float, dict[str, float]] = 0.25
-    cornerC_y_pos: typing.Union[float, dict[str, float]] = 0.25
-    cornerC_height: typing.Union[float, dict[str, float]] = 1.8
-    cornerC_inclination: typing.Union[float, dict[str, float]] = -10
-    cornerD_x_pos: typing.Union[float, dict[str, float]] = 0.25
-    cornerD_y_pos: typing.Union[float, dict[str, float]] = 0.25
-    cornerD_inclination: typing.Union[float, dict[str, float]] = -10
-    cornerD_height: typing.Union[float, dict[str, float]] = 1.8
-    # cornerA_wall_names: typing.Tuple[str, str] = (
-    #     "Back wall - Street",
-    #     "Street Wall Back",
-    # )
-    # cornerB_wall_names: typing.Tuple[str, str] = (
-    #     "Back wall - Door",
-    #     "Door Wall - Back",
-    # 7
+    # cornerC_x_pos: typing.Union[float, dict[str, float]] = 0.25
+    # cornerC_y_pos: typing.Union[float, dict[str, float]] = 0.25
+    # cornerC_height: typing.Union[float, dict[str, float]] = 1.8
+    # cornerC_inclination: typing.Union[float, dict[str, float]] = -10
+    # cornerD_x_pos: typing.Union[float, dict[str, float]] = 0.25
+    # cornerD_y_pos: typing.Union[float, dict[str, float]] = 0.25
+    # cornerD_inclination: typing.Union[float, dict[str, float]] = -10
+    # cornerD_height: typing.Union[float, dict[str, float]] = 1.8
     num_samples: int = 20
     max_time: float = 80 / 1000
 
@@ -1096,9 +1090,8 @@ class training_parameters:
 if __name__ == "__main__":
 
     gene_space = training_parameters(
-        speaker_height={"low": 1.9, "high": 2.4},
-        # dist_from_center={"low": 1.1, "high": 1.9},
-        dist_from_center={"low": 0.6, "high": 1.0},
+        speaker_height={"low": 0.8, "high": 2.3},
+        dist_from_center={"low": 0.6, "high": 1.6},
         dist_from_wall={"low": 0.2, "high": 0.5},
         deviation_from_equilateral={"low": -1.0, "high": 1.0},
         ceiling_diffuser_height={"low": 2.3, "high": 2.75},
@@ -1107,19 +1100,20 @@ if __name__ == "__main__":
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
         cornerA_x_pos={"low": 1.3, "high": 1.3},
         cornerA_y_pos={"low": 0.72, "high": 0.72},
-        cornerA_inclination={"low": 0, "high": 60},
+        cornerA_inclination={"low": 0, "high": 0},
         cornerB_x_pos={"low": 1.44, "high": 1.44},
         cornerB_y_pos={"low": 0.46, "high": 0.46},
-        cornerB_inclination={"low": 0, "high": 60},
-        cornerC_x_pos={"low": 0.3, "high": 1.3},
-        cornerC_y_pos={"low": 0.3, "high": 0.72},
-        cornerC_inclination={"low": -50, "high": 0},
-        cornerC_height={"low": 1.6, "high": 2.5},
-        cornerD_x_pos={"low": 0.3, "high": 1.44},
-        cornerD_y_pos={"low": 0.3, "high": 0.46},
-        cornerD_inclination={"low": -60, "high": 0},
-        cornerD_height={"low": 1.6, "high": 2.5},
-        num_samples=2000,
+        cornerB_inclination={"low": 0, "high": 0},
+        # cornerC_x_pos={"low": 0.3, "high": 1.3},
+        # cornerC_y_pos={"low": 0.3, "high": 0.72},
+        # cornerC_inclination={"low": -50, "high": 0},
+        # cornerC_height={"low": 1.6, "high": 2.5},
+        # cornerD_x_pos={"low": 0.3, "high": 1.44},
+        # cornerD_y_pos={"low": 0.3, "high": 0.46},
+        # cornerD_inclination={"low": -60, "high": 0},
+        # cornerD_height={"low": 1.6, "high": 2.5},
+        # min_listen_pos=1.8,
+        num_samples=5000,
         max_time=40 / 1000,
     )
     print(f"Gene space: {gene_space.aslist()}")
@@ -1140,16 +1134,14 @@ if __name__ == "__main__":
         save_solutions=True,
     )
     ga_instance.run()
-    ga_instance.plot_fitness()
-    ga_instance.plot_genes()
 
     solution, solution_fitness, solution_idx = ga_instance.best_solution()
     pprint.pprint(f"Parameters of the best solution : {training_parameters(*solution)}")
     pprint.pprint(f"Fitness value of the best solution = {solution_fitness}")
 
     room, arrivals = get_arrivals(solution)
-    # room.mesh.show()
     plt.ion()
     fig = plt.figure()
     room.plot_arrivals_interactive(fig, arrivals, False)
     plt.show(block=True)
+    room.mesh.show()
