@@ -76,6 +76,7 @@ material_abs = {
     "diffuser": 0.99,
     "wood": 0.1,
     "absorber": 0.95,
+    "weak_scatter": 0.25,
 }
 
 wall_materials = {
@@ -84,20 +85,23 @@ wall_materials = {
     "Floor": "wood",
     "Street": "brick",
     "Doorway": "brick",
-    "Front": "gypsum",
+    "Front": "weak_scatter",
     "Back": "brick",
     "Door Absorber": "absorber",
     "Street Absorber": "absorber",
-    "Door Fin": "absorber",
-    "Street Fin": "absorber",
     "Back Diffuser": "diffuser",
-    "Ceiling Diffuser": "diffuser",
-    "Spooky Curtain": "absorber",
-    "Door Front": "absorber",
-    "Door Back": "absorber",
+    "Back Diffuser Top": "wood",
+    "Ceiling Diffuser": "absorber",
+    "Cutout Top": "absorber",
+    "Street Absorber": "absorber",
+    "Street Absorber Top": "wood",
+    "Door Absorber": "absorber",
+    "Door Absorber Top": "wood",
+    "Door Front Absorber": "absorber",
+    "Door Front Absorber Top": "wood",
+    "Door Back Absorber": "absorber",
+    "Door Back Absorber Top": "wood",
     "Door Door": "absorber",
-    "Corner A": "absorber",
-    "Corner B": "absorber",
 }
 
 
@@ -487,6 +491,12 @@ class Room:
                     w.mesh, r_source, dir_from_points(r_source, listen_pos)
                 ):
                     raise ObscuresWindow("Right wall obscures window")
+        # for w in self.walls:
+        #     if w.name == "Door Door":
+        #         if test_intersection(
+        #             w.mesh, r_source, dir_from_points(r_source, listen_pos)
+        #         ):
+        #             raise ObscuresWindow("Right wall intersects door")
         self.walls.append(
             build_wall_from_point(
                 "left speaker wall",
@@ -964,29 +974,29 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),
-        rfz_radius=0.2,
+        rfz_radius=0.4,
     )
     listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
         raise ListeningPositionError("Too close to front wall")
     if listen_pos[0] >= params.max_listen_pos:
         raise ListeningPositionError("Too close to back wall")
-    room.corner_wall(
-        "Corner A",
-        ("Back Wall - Street", "Street Wall Back"),
-        params.cornerA_x_pos,
-        params.cornerA_y_pos,
-        0,
-        params.cornerA_inclination,
-    )
-    room.corner_wall(
-        "Corner B",
-        ("Back Wall - Door", "Door Wall - Back"),
-        params.cornerB_x_pos,
-        params.cornerB_y_pos,
-        0,
-        params.cornerB_inclination,
-    )
+    # room.corner_wall(
+    #     "Corner A",
+    #     ("Back Wall - Street", "Street Wall Back"),
+    #     params.cornerA_x_pos,
+    #     params.cornerA_y_pos,
+    #     0,
+    #     params.cornerA_inclination,
+    # )
+    # room.corner_wall(
+    #     "Corner B",
+    #     ("Back Wall - Door", "Door Wall - Back"),
+    #     params.cornerB_x_pos,
+    #     params.cornerB_y_pos,
+    #     0,
+    #     params.cornerB_inclination,
+    # )
     # room.corner_wall(
     #     "Corner C",
     #     ("Back Wall - Street", "Street Wall Back"),
@@ -1043,7 +1053,7 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
         print(f"HOLY GRAIL: {params.max_time * 1000}")
         return params.max_time * 1000
     ITD = float(arrivals[0].total_dist / SPEED_OF_SOUND * 1000)
-    print(f"ITD: {ITD:.1f}, height: {params.ceiling_diffuser_height:.1f}")
+    print(f"ITD: {ITD:.1f}")
     return ITD
 
 
@@ -1060,12 +1070,12 @@ class training_parameters:
     ceiling_diffuser_length: typing.Union[float, dict[str, float]] = 1.0
     ceiling_diffuser_width: typing.Union[float, dict[str, float]] = 1.0
     ceiling_diffuser_position: typing.Union[float, dict[str, float]] = 1.5
-    cornerA_x_pos: typing.Union[float, dict[str, float]] = 0.25
-    cornerA_y_pos: typing.Union[float, dict[str, float]] = 0.25
-    cornerA_inclination: typing.Union[float, dict[str, float]] = 10
-    cornerB_x_pos: typing.Union[float, dict[str, float]] = 0.25
-    cornerB_y_pos: typing.Union[float, dict[str, float]] = 0.25
-    cornerB_inclination: typing.Union[float, dict[str, float]] = 10
+    # cornerA_x_pos: typing.Union[float, dict[str, float]] = 0.25
+    # cornerA_y_pos: typing.Union[float, dict[str, float]] = 0.25
+    # cornerA_inclination: typing.Union[float, dict[str, float]] = 10
+    # cornerB_x_pos: typing.Union[float, dict[str, float]] = 0.25
+    # cornerB_y_pos: typing.Union[float, dict[str, float]] = 0.25
+    # cornerB_inclination: typing.Union[float, dict[str, float]] = 10
     # cornerC_x_pos: typing.Union[float, dict[str, float]] = 0.25
     # cornerC_y_pos: typing.Union[float, dict[str, float]] = 0.25
     # cornerC_height: typing.Union[float, dict[str, float]] = 1.8
@@ -1090,35 +1100,21 @@ class training_parameters:
 if __name__ == "__main__":
 
     gene_space = training_parameters(
-        speaker_height={"low": 0.8, "high": 2.3},
-        dist_from_center={"low": 0.6, "high": 1.6},
+        speaker_height={"low": 1.4, "high": 1.9},
+        dist_from_center={"low": 0.95, "high": 1.3},
         dist_from_wall={"low": 0.2, "high": 0.5},
-        deviation_from_equilateral={"low": -1.0, "high": 1.0},
-        ceiling_diffuser_height={"low": 2.3, "high": 2.75},
+        deviation_from_equilateral={"low": -0.4, "high": 0.4},
+        ceiling_diffuser_height={"low": 2.5, "high": 2.75},
         ceiling_diffuser_width={"low": 1.0, "high": 2.75},
         ceiling_diffuser_length={"low": 1.0, "high": 2.75},
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
-        cornerA_x_pos={"low": 1.3, "high": 1.3},
-        cornerA_y_pos={"low": 0.72, "high": 0.72},
-        cornerA_inclination={"low": 0, "high": 0},
-        cornerB_x_pos={"low": 1.44, "high": 1.44},
-        cornerB_y_pos={"low": 0.46, "high": 0.46},
-        cornerB_inclination={"low": 0, "high": 0},
-        # cornerC_x_pos={"low": 0.3, "high": 1.3},
-        # cornerC_y_pos={"low": 0.3, "high": 0.72},
-        # cornerC_inclination={"low": -50, "high": 0},
-        # cornerC_height={"low": 1.6, "high": 2.5},
-        # cornerD_x_pos={"low": 0.3, "high": 1.44},
-        # cornerD_y_pos={"low": 0.3, "high": 0.46},
-        # cornerD_inclination={"low": -60, "high": 0},
-        # cornerD_height={"low": 1.6, "high": 2.5},
-        # min_listen_pos=1.8,
+        max_listen_pos=2.3,  # QRD diffuser up to 1000Hz design freq
+        min_listen_pos=1.3,
         num_samples=5000,
-        max_time=40 / 1000,
+        max_time=60 / 1000,
     )
-    print(f"Gene space: {gene_space.aslist()}")
     ga_instance = pygad.GA(
-        num_generations=3,
+        num_generations=4,
         num_parents_mating=4,
         fitness_func=fitness_func,
         sol_per_pop=24,
@@ -1131,7 +1127,6 @@ if __name__ == "__main__":
         crossover_probability=0.7,
         keep_elitism=8,
         parallel_processing=["process", 24],
-        save_solutions=True,
     )
     ga_instance.run()
 
