@@ -102,6 +102,7 @@ wall_materials = {
     "Door Back Absorber": "absorber",
     "Door Back Absorber Top": "wood",
     "Door Door": "absorber",
+    "Floor Absorber": "absorber",
 }
 
 
@@ -225,6 +226,9 @@ def test_intersection(
 
 kh420_horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100}
 kh420_vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30}
+
+kh310_horiz_disp: dict[float, float] = {0: 0, 30: 0, 50: -3, 70: -6, 80: -9, 90: -20}
+kh310_vert_disp: dict[float, float] = {0: 0, 30: -3, 60: -6, 90: -9, 100: -30}
 
 
 class Source:
@@ -667,8 +671,8 @@ class Room:
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
         num_samples = int(kwargs.get("num_samples", 10))
-        vert_disp: float = kwargs.get("vert_disp", 90)
-        horiz_disp: float = kwargs.get("horiz_disp", 90)
+        vert_disp: float = kwargs.get("vert_disp", 180)
+        horiz_disp: float = kwargs.get("horiz_disp", 180)
         # TODO: kwarg source selection
         self._max_time = max_time
         self._min_gain = min_gain
@@ -778,10 +782,6 @@ class Room:
                     arrivals.append(Arrival(listen_pos, temp_hits.copy()))
                     if not isinstance(wall, Wall):
                         raise RuntimeError
-                    # print(
-                    #     # f"Reflection from {wall.name}: {db(intensity):.1f}db {source}:{shot.dir}->{new_source} at {total_dist + np.linalg.norm(listen_pos - new_source)/ SPEED_OF_SOUND * 1000:.2f}ms"
-                    #     f"Reflection from {wall.name}: {db(intensity):.1f}db at {(total_dist + np.linalg.norm(listen_pos - new_source))/ SPEED_OF_SOUND * 1000:.2f}ms"
-                    # )
 
                 dir = dir - norm * 2 * dir.dot(norm)
                 source_pos = new_source
@@ -981,38 +981,6 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         raise ListeningPositionError("Too close to front wall")
     if listen_pos[0] >= params.max_listen_pos:
         raise ListeningPositionError("Too close to back wall")
-    # room.corner_wall(
-    #     "Corner A",
-    #     ("Back Wall - Street", "Street Wall Back"),
-    #     params.cornerA_x_pos,
-    #     params.cornerA_y_pos,
-    #     0,
-    #     params.cornerA_inclination,
-    # )
-    # room.corner_wall(
-    #     "Corner B",
-    #     ("Back Wall - Door", "Door Wall - Back"),
-    #     params.cornerB_x_pos,
-    #     params.cornerB_y_pos,
-    #     0,
-    #     params.cornerB_inclination,
-    # )
-    # room.corner_wall(
-    #     "Corner C",
-    #     ("Back Wall - Street", "Street Wall Back"),
-    #     params.cornerC_x_pos,
-    #     params.cornerC_y_pos,
-    #     params.cornerC_height,
-    #     params.cornerC_inclination,
-    # )
-    # room.corner_wall(
-    #     "Corner D",
-    #     ("Back Wall - Door", "Door Wall - Back"),
-    #     params.cornerD_x_pos,
-    #     params.cornerD_y_pos,
-    #     params.cornerD_height,
-    #     params.cornerD_inclination,
-    # )
     room.ceiling_diffuser(
         params.ceiling_diffuser_height,
         params.ceiling_diffuser_length,
@@ -1025,7 +993,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         room._lt.listening_pos(),
         num_samples=params.num_samples,
         max_time=40 / 1000,
-        min_gain=-15,
+        min_gain=params.min_gain,
         order=10,
     )
     (_, r_arrivals) = room.trace(
@@ -1034,7 +1002,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         room._lt.listening_pos(),
         num_samples=params.num_samples,
         max_time=params.max_time,
-        min_gain=-15,
+        min_gain=params.min_gain,
         order=10,
     )
     arrivals = l_arrivals + r_arrivals
@@ -1070,22 +1038,9 @@ class training_parameters:
     ceiling_diffuser_length: typing.Union[float, dict[str, float]] = 1.0
     ceiling_diffuser_width: typing.Union[float, dict[str, float]] = 1.0
     ceiling_diffuser_position: typing.Union[float, dict[str, float]] = 1.5
-    # cornerA_x_pos: typing.Union[float, dict[str, float]] = 0.25
-    # cornerA_y_pos: typing.Union[float, dict[str, float]] = 0.25
-    # cornerA_inclination: typing.Union[float, dict[str, float]] = 10
-    # cornerB_x_pos: typing.Union[float, dict[str, float]] = 0.25
-    # cornerB_y_pos: typing.Union[float, dict[str, float]] = 0.25
-    # cornerB_inclination: typing.Union[float, dict[str, float]] = 10
-    # cornerC_x_pos: typing.Union[float, dict[str, float]] = 0.25
-    # cornerC_y_pos: typing.Union[float, dict[str, float]] = 0.25
-    # cornerC_height: typing.Union[float, dict[str, float]] = 1.8
-    # cornerC_inclination: typing.Union[float, dict[str, float]] = -10
-    # cornerD_x_pos: typing.Union[float, dict[str, float]] = 0.25
-    # cornerD_y_pos: typing.Union[float, dict[str, float]] = 0.25
-    # cornerD_inclination: typing.Union[float, dict[str, float]] = -10
-    # cornerD_height: typing.Union[float, dict[str, float]] = 1.8
     num_samples: int = 20
     max_time: float = 80 / 1000
+    min_gain: float = -15
 
     def aslist(self):
         retlist = []
@@ -1112,9 +1067,10 @@ if __name__ == "__main__":
         min_listen_pos=1.3,
         num_samples=5000,
         max_time=60 / 1000,
+        min_gain=-12,
     )
     ga_instance = pygad.GA(
-        num_generations=4,
+        num_generations=8,
         num_parents_mating=4,
         fitness_func=fitness_func,
         sol_per_pop=24,
