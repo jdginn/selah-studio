@@ -974,7 +974,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),
-        rfz_radius=0.4,
+        rfz_radius=0.2,
     )
     listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
@@ -1063,11 +1063,11 @@ if __name__ == "__main__":
         ceiling_diffuser_width={"low": 1.0, "high": 2.75},
         ceiling_diffuser_length={"low": 1.0, "high": 2.75},
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
-        max_listen_pos=2.3,  # QRD diffuser up to 1000Hz design freq
+        max_listen_pos=2.2,  # QRD diffuser up to 1000Hz design freq
         min_listen_pos=1.3,
         num_samples=5000,
         max_time=60 / 1000,
-        min_gain=-12,
+        min_gain=-15,
     )
     ga_instance = pygad.GA(
         num_generations=8,
