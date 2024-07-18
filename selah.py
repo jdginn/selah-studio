@@ -63,6 +63,25 @@ def dist(p: npt.NDArray, q: npt.NDArray, rs: npt.NDArray) -> float:
         np.outer(np.dot(rs - q, x) / np.dot(x, x), x) + q - rs, axis=1
     )
 
+def rotation_matrix(A: npt.NDArray,B: npt.NDArray) -> npt.NDArray:
+# a and b are in the form of numpy array
+
+   ax = A[0]
+   ay = A[1]
+   az = A[2]
+
+   bx = B[0]
+   by = B[1]
+   bz = B[2]
+
+   au = A/(np.sqrt(ax*ax + ay*ay + az*az))
+   bu = B/(np.sqrt(bx*bx + by*by + bz*bz))
+
+   R=np.array([[bu[0]*au[0], bu[0]*au[1], bu[0]*au[2]], [bu[1]*au[0], bu[1]*au[1], bu[1]*au[2]], [bu[2]*au[0], bu[2]*au[1], bu[2]*au[2]] ])
+
+
+   return(R)
+
 
 class Axis(Enum):
     X = 1
@@ -239,11 +258,25 @@ class Source:
         self,
         horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100},
         vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30},
+        x_dim: float,
+        y_dim: float,
+        z_dim: float,
+        y_offset: float,
+        z_offset: float,
+        x_margin: float,
+        y_margin: float,
+        z_margin: float,
     ):
         self._h_x = np.array(list(horiz_disp.keys()), np.float32)
         self._h_y = np.array(list(horiz_disp.values()), np.float32)
         self._v_x = np.array(list(vert_disp.keys()), np.float32)
         self._v_y = np.array(list(vert_disp.values()), np.float32)
+
+        self._x_dim = x_dim
+        self._y_dim = y_dim
+        self._z_dim = z_dim
+        self._y_offset= y_offset
+        self._z_offset= x_offset
 
     def intensity(self, vert_pos: float, horiz_pos: float) -> float:
         val = np.interp(abs(vert_pos), self._v_x, self._v_y) + np.interp(
@@ -252,6 +285,20 @@ class Source:
         if not isinstance(val, float):
             raise RuntimeError
         return val
+
+    def test_intersection(self, placement: npt.NDArray, norm: npt.NDArray, test_point: npt.NDArray) -> bool:
+        box = trimesh.primitives.Box(np.array([self._x_dim, self._y_dim, self._z_dim]))
+        translation = trimesh.transformations.translation_matrix(placement - np.array([0, self._y_offset, self._z_offset]))
+        rotation = rotation_matrix(np.array([0, 0, 0]), norm)
+        return box.apply_transform(translation).apply_transform(rotation).contains(test_point)[0]
+
+    def test_intersection_plane(self, placement: npt.NDArray, norm: npt.NDArray, test_point: npt.NDArray) -> bool:
+        translated_test_point = test_point
+        return self.mesh.contains(translated_test_point)[0]
+
+    def test_intersection_with_margin(self, placement: npt.NDArray, norm: npt.NDArray, test_point: npt.NDArray) -> bool:
+        translated_test_point = test_point
+        return self.mesh.contains(translated_test_point)[0]
 
 
 def dir_from_points(p1: npt.NDArray, p2: npt.NDArray) -> npt.NDArray:
