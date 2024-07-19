@@ -48,7 +48,7 @@ class MaterialManager:
             raise MaterialException(
                 "Wall materials dict must specify a default material"
             )
-        for name, mat in wall_materials:
+        for name, mat in wall_materials.items():
             if mat not in self._materials:
                 raise MaterialException(
                     f"Wall {name} specifies material {mat}, which is missing from materials dict: {self._materials}"
@@ -56,5 +56,7 @@ class MaterialManager:
         self._wall_materials = wall_materials
 
     def get_wall(self, name: str) -> Material:
-        material_name = self._wall_materials.get(name, "default")
+        if name not in self._wall_materials.keys():
+            name = "default"
+        material_name = self._wall_materials[name]
         return self._materials[material_name]

@@ -10,6 +10,24 @@ def dist(p: npt.NDArray, q: npt.NDArray, rs: npt.NDArray) -> float:
     )
 
 
+def lineseg_dist(a: npt.NDArray, b: npt.NDArray, p: npt.NDArray) -> npt.NDArray:
+
+    # normalized tangent vector
+    d = np.divide(b - a, np.linalg.norm(b - a))
+
+    # signed parallel distance components
+    s = np.dot(a - p, d)
+    t = np.dot(p - b, d)
+
+    # clamped parallel distance
+    h = np.maximum.reduce([s, t, 0])
+
+    # perpendicular distance component
+    c = np.cross(p - a, d)
+
+    return np.hypot(h, np.linalg.norm(c))
+
+
 def rotation_matrix(A: npt.NDArray, B: npt.NDArray) -> npt.NDArray:
     # a and b are in the form of numpy array
 

@@ -208,6 +208,8 @@ class Room:
     ):
         self.walls = walls
         self._mm = mm
+        for wall in self.walls:
+            wall.material = self._mm.get_wall(wall.name)
 
     def listening_triangle(
         self,
@@ -258,7 +260,7 @@ class Room:
                 self.mesh,
                 r_source,
                 geometry.dir_from_points(r_source, listen_pos),
-                self._mm.get_wall("reft speaker wall"),
+                self._mm.get_wall("right speaker wall"),
             )
         )
 
@@ -371,7 +373,7 @@ class Room:
         for w in self.walls:
             if w.name == name:
                 return w
-        raise RuntimeError
+        raise SelahException(f"Could not find requested wall {name}")
 
     # TODO: terminate reflections for each trace with the nearest point to listen pos, instead of the upcoming next reflection
     # TODO monte carlo simulation:
@@ -505,7 +507,9 @@ class Room:
                 )
 
                 # Check whether this reflection passes within the RFZ
-                dist_from_crit = geometry.dist(new_source, source_pos, listen_pos)
+                dist_from_crit = geometry.lineseg_dist(
+                    new_source, source_pos, listen_pos
+                )
                 total_dist = total_dist + float(np.linalg.norm(new_source - source_pos))
                 # Only check out to some number of ms
                 if total_dist / SPEED_OF_SOUND > max_time:
