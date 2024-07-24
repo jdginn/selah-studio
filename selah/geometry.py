@@ -3,14 +3,8 @@ import numpy.typing as npt
 import trimesh
 
 
-def dist(p: npt.NDArray, q: npt.NDArray, rs: npt.NDArray) -> float:
-    x = p - q
-    return np.linalg.norm(
-        np.outer(np.dot(rs - q, x) / np.dot(x, x), x) + q - rs, axis=1
-    )
-
-
 def lineseg_dist(a: npt.NDArray, b: npt.NDArray, p: npt.NDArray) -> npt.NDArray:
+    """Returns the minimum distance between point p and the line segment defined by points a and b"""
 
     # normalized tangent vector
     d = np.divide(b - a, np.linalg.norm(b - a))
@@ -29,7 +23,7 @@ def lineseg_dist(a: npt.NDArray, b: npt.NDArray, p: npt.NDArray) -> npt.NDArray:
 
 
 def rotation_matrix(A: npt.NDArray, B: npt.NDArray) -> npt.NDArray:
-    # a and b are in the form of numpy array
+    """Returns the rotation matrix to rotate unit vector A to unit vector B"""
 
     ax = A[0]
     ay = A[1]
@@ -54,6 +48,7 @@ def rotation_matrix(A: npt.NDArray, B: npt.NDArray) -> npt.NDArray:
 
 
 def dir_from_points(p1: npt.NDArray, p2: npt.NDArray) -> npt.NDArray:
+    """Returns the unit vector representing the direction of a line segment between poitns p1 and p2"""
     unscaled = p2 - p1
     return unscaled / np.linalg.norm(unscaled)
 
@@ -61,5 +56,6 @@ def dir_from_points(p1: npt.NDArray, p2: npt.NDArray) -> npt.NDArray:
 def test_intersection(
     mesh: trimesh.Trimesh, point: npt.NDArray, normal: npt.NDArray
 ) -> bool:
+    """Returns true if the wall defiend by a point and normal intersects the mesh"""
     mp = trimesh.intersections.mesh_plane(mesh, normal, point)
     return len(mp) > 0
