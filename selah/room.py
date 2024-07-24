@@ -29,6 +29,11 @@ class ListeningPositionError(SelahException):
 
 
 class ListeningTriangle:
+    """
+    Represents a listening triangle composed of two sound sources and a listener.
+
+    Useful for computing positions and ensuring that symmetry is respected.
+    """
 
     def __init__(
         self,
@@ -61,6 +66,7 @@ class ListeningTriangle:
         # TODO: need to know which direction from the wall is interior vs exterior
 
     def l_source(self) -> npt.NDArray:
+        """Returns the position of the left stereo source"""
         p = self._wall.center_pos()
         match self._axis:
             case Axis.X:
@@ -78,6 +84,7 @@ class ListeningTriangle:
                 raise RuntimeError
 
     def r_source(self) -> npt.NDArray:
+        """Returns the position of the right stereo source"""
         p = self._wall.center_pos()
         match self._axis:
             case Axis.X:
@@ -94,7 +101,11 @@ class ListeningTriangle:
             case Axis.Z:
                 raise RuntimeError
 
+    # Value from Rod Gervais' book Home Recording Studio: Build It Like The Pros
+    LISTENER_DIST_INTO_TRIANGLE = 0.38
+
     def listening_pos(self) -> npt.NDArray:
+        """Returns the position of the listener's head"""
         p = self._wall.center_pos()
         if hasattr(self, "_listen_pos"):
             return np.array([p[0] + self._listen_pos, p[1], self.height])
@@ -117,50 +128,13 @@ class ListeningTriangle:
             case Axis.Z:
                 raise RuntimeError
 
-    def positions(self) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-        p = self._wall.center_pos()
-        match self._axis:
-            case Axis.X:
-                if self.dist_from_center > self._wall.width(Axis.Y) / 2.0:
-                    raise RuntimeError("attempting to locate speaker outside of room")
-                return (
-                    np.array(
-                        [
-                            self._wall_pos + self.dist_from_wall,
-                            p[1] - self.dist_from_center,
-                            self.speaker_height,
-                        ],
-                        dtype="float32",
-                    ),
-                    np.array(
-                        [
-                            self._wall_pos + self.dist_from_wall,
-                            p[1] + self.dist_from_center,
-                            self.speaker_height,
-                        ],
-                        dtype="float32",
-                    ),
-                    np.array(
-                        [
-                            self._wall_pos
-                            + self.dist_from_wall
-                            + (self.dist_from_center * math.sqrt(3)),
-                            +self._deviation - 0.38,  # magic number from Rod Gervais
-                            p[1],
-                            self.height,
-                        ],
-                        dtype="float32",
-                    ),
-                )
-            case Axis.Y:
-                raise RuntimeError
-            case Axis.Z:
-                raise RuntimeError
-        pass
-
 
 @dataclass
 class Reflection:
+    """
+    Represents a discrete sound reflection off of a surface.
+    """
+
     pos: np.ndarray
     wall: typing.Union[Wall, None]
     parent: np.ndarray
@@ -178,11 +152,21 @@ class Reflection:
 
 @dataclass
 class Shot:
+    """
+    Represents the origin of a ray of sound, including its direction, intensity,
+    and any other initial information required to predict its behavior.
+    """
+
     dir: npt.NDArray
     intensity: float
 
 
 class Arrival:
+    """
+    Represents a series of reflections that arrives at a given position. Allows tracing the full
+    path of reflections that were required to reach the position.
+    """
+
     pos: np.ndarray
     parent: Reflection
     reflection_list: typing.List[Reflection]
@@ -205,8 +189,12 @@ class Arrival:
 
 
 class Room:
+    """
+    Models a room for acoustic purposes.
 
-    # TODO: probably needs to be fleshed out better
+    Rooms are constructed with walls and their shape is defined as a geometrical mesh.
+    """
+
     def __init__(
         self, walls: typing.List[Wall], mm: MaterialManager = MaterialManager()
     ):
@@ -225,6 +213,11 @@ class Room:
         rfz_radius: float,
         **kwargs,
     ) -> None:
+        """
+        Installs sources and listening position in accordance with a listening triangle.
+
+        Also adds walls to the room appropriate for flush-mounting speakers.
+        """
         self._lt = ListeningTriangle(
             self.get_wall(wall_name),
             height,
@@ -268,9 +261,10 @@ class Room:
             )
         )
 
-    def ceiling_diffuser(
+    def ceiling_absorber(
         self, height: float, length: float, width: float, position: float
     ) -> None:
+        """Adds an acoustic absorber to the room suspended from the ceiling"""
         floor = self.get_wall("Floor")
         centroid = floor.mesh.centroid + np.array([0, 0, height])
         larr = np.array([length, 0, 0])
@@ -301,6 +295,7 @@ class Room:
         inclination: float = 0,
         **kwargs,
     ) -> Wall:
+        """Adds a wall straddling a corner of the room at the specified location and angle."""
         # TODO: support using walls to define this
         x_wall, y_wall = wall_names
         xw = self.get_wall(x_wall)
@@ -353,6 +348,7 @@ class Room:
 
     @property
     def mesh(self) -> trimesh.Trimesh:
+        """Returns a mesh representing the entirety of the shape of this room."""
         m = trimesh.util.concatenate([x.mesh for x in self.walls])
         if not isinstance(m, trimesh.Trimesh):
             raise RuntimeError
@@ -360,6 +356,7 @@ class Room:
         return m
 
     def faces_to_wall(self, idx: int) -> Wall:
+        """Maps a given face to the wall to which it belongs."""
         if not hasattr(self, "_faces_to_wall"):
             self._faces_to_wall: typing.List[Wall] = []
             for w in self.walls:
@@ -368,6 +365,7 @@ class Room:
         return self._faces_to_wall[idx]
 
     def get_wall(self, name: str | int) -> Wall:
+        """Returns a wall from a room by name."""
         for w in self.walls:
             if w.name == name:
                 return w
@@ -379,7 +377,11 @@ class Room:
         orig_source_pos: npt.NDArray,
         listen_pos: npt.NDArray,
         **kwargs,
-    ) -> typing.Tuple[typing.List[typing.List[Reflection]], typing.List[Arrival]]:
+    ) -> typing.List[Arrival]:
+        """
+        Uses ray tracing to determine time of arrival and intensity of each reflection
+        that arrives at the listening position.
+        """
         order = kwargs.get("order", 10)
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
@@ -506,6 +508,9 @@ class Room:
         return (hits, arrivals)
 
     def draw_from_above(self):
+        """
+        Plots a 2-dimensional representation of the room as viewed from above.
+        """
         plt.scatter(
             self._lt.l_source()[0], self._lt.l_source()[1], marker="x", linewidth=8
         )
@@ -530,6 +535,9 @@ class Room:
         outline.plot_entities()
 
     def draw_from_side(self):
+        """
+        Plots a 2-dimensional representation of the room as viewed from the side.
+        """
         plt.scatter(
             self._lt.l_source()[0], self._lt.l_source()[2], marker="x", linewidth=8
         )
@@ -560,6 +568,9 @@ class Room:
         arrivals: typing.List[Arrival],
         manually_advance=False,
     ):
+        """
+        Plots all arrivals to the listening position along with the paths they took to get there.
+        """
 
         colors = ["b", "g", "r", "y", "c", "m", "y", "k"]
         ax1 = fig.add_subplot(2, 2, 1)
@@ -607,6 +618,9 @@ class Room:
         arrivals: typing.List[Arrival],
         manually_advance=False,
     ):
+        """
+        Interactive view for arrivals allowing each reflection to be viewed individually
+        """
         self._curr_arrival = -1
         orig_arrivals = arrivals
 
@@ -650,7 +664,3 @@ class Room:
         fig.canvas.mpl_connect("pick_event", on_pick)
         fig.canvas.mpl_connect("key_press_event", on_press)
         self.plot_arrivals(fig, arrivals, manually_advance)
-
-    def write(self, filename: str):
-        scene = trimesh.Scene(self.mesh)
-        scene.export(filename, "stl")
