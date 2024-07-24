@@ -16,6 +16,10 @@ from .source import Source
 from .wall import Axis, Wall, build_wall_from_point
 
 
+class InvalidMeshException(SelahException):
+    """Indicates an invalid mesh"""
+
+
 class ObscuresWindow(SelahException):
     """Indicates an attempt to create a wall that obscures the window"""
 
@@ -329,14 +333,9 @@ class Room:
                 if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
                     ydir = geometry.dir_from_points(shared_vertex_at_zero, v)
                     break
-        # print(f"Corner {name}")
-        # print(f"Shared point: {shared_vertex_at_zero}")
         xpoint = shared_vertex_at_zero + x_pos * xdir
-        # print(f"xpoint: {xpoint}")
         ypoint = shared_vertex_at_zero + y_pos * ydir
-        # print(f"ypoint: {ypoint}")
         midpoint = xpoint + (ypoint - xpoint) / 2 + np.array([0, 0, height])
-        # print(f"midpoint: {midpoint}")
         i_rad = inclination * np.pi / 180
         pitch = np.array(
             [
@@ -348,7 +347,6 @@ class Room:
         # norm = np.array([(midpoint - xpoint)[1], -(midpoint - xpoint)[0], 0]).dot(pitch)
         line_dir = geometry.dir_from_points(xpoint, midpoint)
         norm = np.array([line_dir[1], -line_dir[0], 0]).dot(pitch)
-        # print(f"norm: {norm}")
         w = build_wall_from_point(name, self.mesh, midpoint, norm)
         self.walls.append(w)
         return w
@@ -375,30 +373,6 @@ class Room:
                 return w
         raise SelahException(f"Could not find requested wall {name}")
 
-    # TODO: terminate reflections for each trace with the nearest point to listen pos, instead of the upcoming next reflection
-    # TODO monte carlo simulation:
-    # 1. automatically sweep features to search for optimal:
-    #       [X] speaker distance from center
-    #       [X] speaker distance from front wall
-    #       [X] speaker height
-    #       [X] listener distance from front wall
-    #       [X] listener height
-    #       [X] ceiling diffuser height
-    #       [X] ceiling diffuser width
-    #       [X] ceiling diffuser length
-    #       [X] ceiling diffuser position (x axis)
-    #       [ ] rear corner positions
-    #       [ ] rear corner inclination
-    # 2. limitations:
-    #       [ ] speaker collision with front wall
-    #       [ ] speaker obscures window
-    #       [X] limited range for listener height
-    #       [X] limited range for listener position on x axis (not too close to front or rear wall)
-    #       [X] limited deviation from equilateral listening triangle
-    # 3. reward function:
-    #       [X] maximize ITD (time until first reflection)
-    #       [ ] minimize intensity of first X reflections
-    #       [ ] minimize deviation from equilateral listening triangle
     def trace(
         self,
         source: Source,
@@ -412,7 +386,6 @@ class Room:
         num_samples = int(kwargs.get("num_samples", 10))
         vert_disp: float = kwargs.get("vert_disp", 180)
         horiz_disp: float = kwargs.get("horiz_disp", 180)
-        # TODO: kwarg source selection
         self._max_time = max_time
         self._min_gain = min_gain
         source_pos = orig_source_pos
@@ -474,14 +447,14 @@ class Room:
                 new_dir: npt.NDArray = np.empty(3)
                 new_source: npt.NDArray = np.empty(3)
 
-                idx_tri, idx_ray, loc = intersector.intersects_id(
+                idx_tri, _, loc = intersector.intersects_id(
                     [source_pos],
                     [dir],
                     return_locations=True,
                     multiple_hits=True,
                 )
                 if len(loc) == 0:
-                    raise RuntimeError
+                    raise SelahException("Reflected ray never terminates")
                 found = False
 
                 def min_norm(e):
@@ -499,8 +472,7 @@ class Room:
                         found = True
                         break
                 if not found:
-                    break
-                    # raise RuntimeError
+                    raise SelahException("Ray only reflects back to self")
 
                 temp_hits.append(
                     Reflection(new_source, wall, source_pos, intensity, total_dist)
