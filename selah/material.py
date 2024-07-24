@@ -15,12 +15,15 @@ class Material:
         self._diffusion = diffusion
 
     def absorption(self, freq: float = 1000) -> float:
+        """Returns the absorption coefficient for the passed frequency"""
         return self._absorption
 
     def scattering(self, freq: float = 1000) -> float:
+        """Returns the scattering coefficient for the passed frequency"""
         return self._scattering
 
     def diffusion(self, freq: float = 1000) -> float:
+        """Returns the diffusion coefficient for the passed frequency"""
         return self._diffusion
 
 
@@ -36,7 +39,15 @@ default_materials: typing.Dict[str, Material] = {
 
 
 class MaterialManager:
+
     def __init__(self, materials: typing.Dict[str, Material] | None = None):
+        """
+        Assigns materials by wall name, respecting defaults
+
+        Optional materials argument maps materials by name to their properties. If
+        no dict is passed, a builtin default materials dict is used.
+        """
+
         if materials is None:
             self._materials = default_materials
         else:
@@ -44,6 +55,12 @@ class MaterialManager:
         self._wall_materials = {"default": "brick"}
 
     def set_wall_materials(self, wall_materials: typing.Dict[str, str]):
+        """
+        Sets the material to be used for each wall.
+
+        wall_materials dict must contain a "default" field, which will be
+        used for any wall not explicitly set in the dict.
+        """
         if "default" not in wall_materials:
             raise MaterialException(
                 "Wall materials dict must specify a default material"
@@ -56,6 +73,10 @@ class MaterialManager:
         self._wall_materials = wall_materials
 
     def get_wall(self, name: str) -> Material:
+        """
+        Returns the material of the requested wall. If the requested wall
+        is not found in the manager, returns the default material.
+        """
         if name not in self._wall_materials.keys():
             name = "default"
         material_name = self._wall_materials[name]
