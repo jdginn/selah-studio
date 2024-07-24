@@ -395,7 +395,7 @@ class Room:
         source_normal = geometry.dir_from_points(source_pos, listen_pos)
         direct_dist = np.linalg.norm(source_pos - listen_pos)
 
-        shots: typing.List[Shot] = [Shot(source_normal, source.intensity(0, 0))]
+        shots: typing.List[Shot] = [Shot(source_normal, source.gain(0, 0))]
         # These are in degrees
         h_steps = int(math.floor(math.sqrt(num_samples)))
         h_step_size = horiz_disp / (h_steps - 1)
@@ -427,7 +427,7 @@ class Room:
                 shots.append(
                     Shot(
                         new_dir / np.linalg.norm(new_dir),
-                        source.intensity(theta_v_deg, theta_h_deg),
+                        source.gain(theta_v_deg, theta_h_deg),
                     )
                 )
 

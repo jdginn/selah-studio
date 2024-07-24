@@ -28,6 +28,12 @@ class Source:
         y_margin: float = 0.05,
         z_margin: float = 0.05,
     ):
+        """
+        Source represents a directional sound source.
+
+        horiz_disp and vert_disp map dispersions angles in degrees to gain at that
+        angle relative to the main acoustic axis in decibels.
+        """
         self._h_x = np.array(list(horiz_disp.keys()), np.float32)
         self._h_y = np.array(list(horiz_disp.values()), np.float32)
         self._v_x = np.array(list(vert_disp.keys()), np.float32)
@@ -39,9 +45,14 @@ class Source:
         self._y_offset = y_offset
         self._z_offset = z_offset
 
-    def intensity(self, vert_pos: float, horiz_pos: float) -> float:
-        val = np.interp(abs(vert_pos), self._v_x, self._v_y) + np.interp(
-            abs(horiz_pos), self._h_x, self._h_y
+    def gain(self, vert_angle: float, horiz_angle: float) -> float:
+        """
+        Returns the gain of the source at the given angle in decibels.
+
+        Angles in degrees.
+        """
+        val = np.interp(abs(vert_angle), self._v_x, self._v_y) + np.interp(
+            abs(horiz_angle), self._h_x, self._h_y
         )
         if not isinstance(val, float):
             raise RuntimeError
@@ -50,6 +61,7 @@ class Source:
     def test_intersection(
         self, placement: npt.NDArray, norm: npt.NDArray, test_point: npt.NDArray
     ) -> bool:
+        """work in progress"""
         box = trimesh.primitives.Box(np.array([self._x_dim, self._y_dim, self._z_dim]))
         translation = trimesh.transformations.translation_matrix(
             placement - np.array([0, self._y_offset, self._z_offset])
