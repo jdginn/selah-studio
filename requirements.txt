@@ -3,3 +3,4 @@ numpy
 trimesh
 networkx
 lxml
+dataclasses_json

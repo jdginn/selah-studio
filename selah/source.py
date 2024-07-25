@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json
 import math
 import typing
 
@@ -14,6 +15,13 @@ kh420_vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30}
 kh310_horiz_disp: dict[float, float] = {0: 0, 30: 0, 50: -3, 70: -6, 80: -9, 90: -20}
 kh310_vert_disp: dict[float, float] = {0: 0, 30: -3, 60: -6, 90: -9, 100: -30}
 
+@dataclass_json
+@dataclass
+class ShotSpecification:
+    # source: str
+    pitch: float = 0
+    yaw: float = 0
+
 @dataclass
 class Shot:
     """
@@ -25,10 +33,9 @@ class Shot:
     """
 
     dir: npt.NDArray
-    intensity: float
+    gain: float
     source: typing.Any = None
-    pitch: float = 0
-    yaw: float = 0
+    spec: ShotSpecification = field(default_factory=ShotSpecification)
 
 class Source:
     """Dispersions in degrees"""
@@ -70,6 +77,7 @@ class Source:
 
         Angles in degrees.
         """
+        shot_spec = ShotSpecification(pitch, yaw)
         normal = geometry.dir_from_points(source_pos, listening_pos)
         pitch_rads = pitch / 180 * np.pi
         pitch_matrix = np.array(
@@ -93,8 +101,7 @@ class Source:
             new_dir,
             self.gain(pitch, yaw),
             self,
-            pitch,
-            yaw
+            shot_spec,
         )
 
     def get_shots(self, source_pos: npt.NDArray, listening_pos: npt.NDArray, num_rays: int=1000) -> typing.List[Shot]:
