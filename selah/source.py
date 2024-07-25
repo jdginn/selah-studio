@@ -1,3 +1,7 @@
+from dataclasses import dataclass
+import math
+import typing
+
 import numpy as np
 import numpy.typing as npt
 import trimesh
@@ -10,6 +14,21 @@ kh420_vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30}
 kh310_horiz_disp: dict[float, float] = {0: 0, 30: 0, 50: -3, 70: -6, 80: -9, 90: -20}
 kh310_vert_disp: dict[float, float] = {0: 0, 30: -3, 60: -6, 90: -9, 100: -30}
 
+@dataclass
+class Shot:
+    """
+    Represents the origin of a ray of sound, including its direction, intensity,
+    and any other initial information required to predict its behavior.
+
+    Degrees in angles.
+    Intensity in dB.
+    """
+
+    dir: npt.NDArray
+    intensity: float
+    source: typing.Any = None
+    pitch: float = 0
+    yaw: float = 0
 
 class Source:
     """Dispersions in degrees"""
@@ -44,6 +63,55 @@ class Source:
         self._z_dim = z_dim
         self._y_offset = y_offset
         self._z_offset = z_offset
+
+    def get_shot_from_angles(self, source_pos: npt.NDArray, listening_pos: npt.NDArray, pitch: float=0, yaw: float=0) -> Shot:
+        """
+        Returns a shot fired from this speaker at the specified pitch and yaw offset from the direct path to the listening_pos
+
+        Angles in degrees.
+        """
+        normal = geometry.dir_from_points(source_pos, listening_pos)
+        pitch_rads = pitch / 180 * np.pi
+        pitch_matrix = np.array(
+            [
+                [math.cos(pitch_rads), 0, -math.sin(pitch_rads)],
+                [0, 1, 0],
+                [math.sin(pitch_rads), 0, math.cos(pitch_rads)],
+            ]
+        )
+        yaw_rads = pitch / 180 * np.pi
+        yaw_matrix = np.array(
+            [
+                [math.cos(yaw_rads), math.sin(yaw_rads), 0],
+                [-math.sin(pitch_rads), math.cos(pitch_rads), 0],
+                [0, 0, 1],
+            ]
+        )
+        new_dir = yaw_matrix.dot(pitch_matrix).dot(normal)
+        new_dir = new_dir / np.linalg.norm(new_dir)
+        return Shot(
+            new_dir,
+            self.gain(pitch, yaw),
+            self,
+            pitch,
+            yaw
+        )
+
+    def get_shots(self, source_pos: npt.NDArray, listening_pos: npt.NDArray, num_rays: int=1000) -> typing.List[Shot]:
+        """Returns num_rays shots shot from this speaker"""
+        # TODO: this should probably be an iterator rather than return a list
+        shots: typing.List[Shot] = [Shot(geometry.dir_from_points(source_pos, listening_pos), 0, self)]
+        SIMULATION_DISPERSION_RANGE=180
+        h_steps = int(math.floor(math.sqrt(num_rays)))
+        h_step_size = SIMULATION_DISPERSION_RANGE/ (h_steps - 1)
+        v_steps = num_rays// h_steps
+        v_step_size = SIMULATION_DISPERSION_RANGE/ (v_steps - 1)
+        for v in range(v_steps):
+            pitch = -SIMULATION_DISPERSION_RANGE / 2 + v_step_size * v
+            for h in range(h_steps):
+                yaw = -SIMULATION_DISPERSION_RANGE / 2 + h_step_size * h
+                shots.append(self.get_shot_from_angles(source_pos, listening_pos, pitch, yaw))
+        return shots
 
     def gain(self, vert_angle: float, horiz_angle: float) -> float:
         """

@@ -150,17 +150,6 @@ class Reflection:
         return default
 
 
-@dataclass
-class Shot:
-    """
-    Represents the origin of a ray of sound, including its direction, intensity,
-    and any other initial information required to predict its behavior.
-    """
-
-    dir: npt.NDArray
-    intensity: float
-
-
 class Arrival:
     """
     Represents a series of reflections that arrives at a given position. Allows tracing the full
@@ -385,50 +374,13 @@ class Room:
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
         num_samples = int(kwargs.get("num_samples", 10))
-        vert_disp: float = kwargs.get("vert_disp", 180)
-        horiz_disp: float = kwargs.get("horiz_disp", 180)
         self._max_time = max_time
         self._min_gain = min_gain
         source_pos = orig_source_pos
 
-        source_normal = geometry.dir_from_points(source_pos, listen_pos)
         direct_dist = np.linalg.norm(source_pos - listen_pos)
 
-        shots: typing.List[Shot] = [Shot(source_normal, source.gain(0, 0))]
-        # These are in degrees
-        h_steps = int(math.floor(math.sqrt(num_samples)))
-        h_step_size = horiz_disp / (h_steps - 1)
-        v_steps = num_samples // h_steps
-        v_step_size = vert_disp / (v_steps - 1)
-        for v in range(v_steps):
-            theta_v_deg = -vert_disp / 2 + v_step_size * v
-            theta_v = (theta_v_deg) / 180 * math.pi
-            pitch = np.array(
-                [
-                    [math.cos(theta_v), 0, -math.sin(theta_v)],
-                    [0, 1, 0],
-                    [math.sin(theta_v), 0, math.cos(theta_v)],
-                ]
-            )
-            for h in range(h_steps):
-                theta_h_deg = -horiz_disp / 2 + h_step_size * h
-                theta_h = (theta_h_deg) / 180 * math.pi
-                yaw = np.array(
-                    [
-                        [math.cos(theta_h), math.sin(theta_h), 0],
-                        [-math.sin(theta_h), math.cos(theta_h), 0],
-                        [0, 0, 1],
-                    ]
-                )
-
-                new_dir = yaw.dot(pitch).dot(source_normal)
-                new_dir = new_dir / np.linalg.norm(new_dir)
-                shots.append(
-                    Shot(
-                        new_dir / np.linalg.norm(new_dir),
-                        source.gain(theta_v_deg, theta_h_deg),
-                    )
-                )
+        shots = source.get_shots(source_pos, listen_pos, num_samples)
 
         hits: typing.List[typing.List[Reflection]] = []
         arrivals: typing.List[Arrival] = []
@@ -445,7 +397,6 @@ class Room:
             dir = shot.dir
             for i in range(order):
                 norm: npt.NDArray = np.empty(3)
-                new_dir: npt.NDArray = np.empty(3)
                 new_source: npt.NDArray = np.empty(3)
 
                 idx_tri, _, loc = intersector.intersects_id(
