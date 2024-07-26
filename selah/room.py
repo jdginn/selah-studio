@@ -1,6 +1,7 @@
+from dataclasses import dataclass
+import json
 import math
 import typing
-from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -12,7 +13,7 @@ from . import geometry
 from .exceptions import SelahException
 from .material import MaterialManager
 from .sound import SPEED_OF_SOUND, db, from_db
-from .source import Source
+from .source import Source, Shot
 from .wall import Axis, Wall, build_wall_from_point
 
 
@@ -158,13 +159,15 @@ class Arrival:
 
     pos: np.ndarray
     parent: Reflection
+    shot: Shot
     reflection_list: typing.List[Reflection]
     # For visualization purposes
     _color: str
 
-    def __init__(self, pos: npt.NDArray, reflections: typing.List[Reflection]):
+    def __init__(self, pos: npt.NDArray, reflections: typing.List[Reflection], shot: Shot):
         self.pos = pos
         self.reflection_list = reflections
+        self.shot = shot
         self.parent = reflections[-1]
         self.intensity = self.parent.intensity
         self.total_dist = self.parent.total_dist + np.linalg.norm(pos - self.parent.pos)
@@ -339,7 +342,7 @@ class Room:
         """Returns a mesh representing the entirety of the shape of this room."""
         m = trimesh.util.concatenate([x.mesh for x in self.walls])
         if not isinstance(m, trimesh.Trimesh):
-            raise RuntimeError
+            raise SelahException("Failed to create mesh")
         m.fix_normals(False)
         return m
 
@@ -359,6 +362,89 @@ class Room:
                 return w
         raise SelahException(f"Could not find requested wall {name}")
 
+    def trace_shot(self, shot: Shot,
+        orig_source_pos: npt.NDArray,
+        listen_pos: npt.NDArray,
+        order: int=10,
+        max_time: float=60,
+        min_gain: float=-20,
+                   ) -> typing.Tuple[typing.List[Reflection], typing.Union[Arrival, None]]:
+
+        source_pos = orig_source_pos
+        temp_hits: typing.List[Reflection] = []
+        direct_dist = np.linalg.norm(source_pos - listen_pos)
+        total_dist: float = -float(direct_dist)
+        intensity = from_db(shot.gain)
+        wall: typing.Union[Wall, None] = None
+
+        intersector = trimesh.ray.ray_triangle.RayMeshIntersector(self.mesh)
+        dir = shot.dir
+        for i in range(order):
+            norm: npt.NDArray = np.empty(3)
+            new_source: npt.NDArray = np.empty(3)
+
+            idx_tri, _, loc = intersector.intersects_id(
+                [source_pos],
+                [dir],
+                return_locations=True,
+                multiple_hits=True,
+            )
+
+            print(f"source {source_pos}, dir {dir}, {len(loc)} hits")
+            def min_norm(e):
+                return np.linalg.norm(source_pos - e[0])
+
+            match len(loc):
+                case 0:
+                    raise SelahException("Reflected ray never terminates")
+                case 1:
+                    if np.linalg.norm(source_pos - loc[0]) > 0:
+                        new_source = loc[0]
+                        norm = self.mesh.face_normals[idx_tri[0]]
+                        dir = dir - norm * 2 * dir.dot(norm)
+                        wall = self.faces_to_wall(idx_tri[0])
+                        intensity = intensity * (1 - wall.material.absorption())
+                case _:
+                    found = False
+                    print(loc)
+                    for this_loc, tri_idx in sorted(
+                        zip(loc, idx_tri), key=min_norm, reverse=False
+                    ):
+                        if np.linalg.norm(source_pos - this_loc) < 1e-6:
+                            continue
+                        new_source = this_loc
+                        norm = self.mesh.face_normals[tri_idx]
+                        dir = dir - norm * 2 * dir.dot(norm)
+                        wall = self.faces_to_wall(tri_idx)
+                        intensity = intensity * (1 - wall.material.absorption())
+                        found = True
+                        break
+                    if not found:
+                        raise SelahException("Malformed reflection")
+
+            temp_hits.append(
+                Reflection(new_source, wall, source_pos, intensity, total_dist)
+            )
+
+            # Check whether this reflection passes within the RFZ
+            dist_from_crit = geometry.lineseg_dist(
+                new_source, source_pos, listen_pos
+            )
+            total_dist = total_dist + float(np.linalg.norm(new_source - source_pos))
+            # Only check out to some number of ms
+            if total_dist / SPEED_OF_SOUND > max_time:
+                break
+            # Only check out to some minimum gain
+            if db(intensity) < min_gain:
+                break
+            if dist_from_crit < self._lt.rfz_radius and i > 0:
+                # We only care about rays that reflect to the RFZ
+                # return temp_hits, Arrival(listen_pos, temp_hits)
+                pass
+            source_pos = new_source
+
+        return temp_hits, None
+
     def trace(
         self,
         source: Source,
@@ -370,6 +456,10 @@ class Room:
         Uses ray tracing to determine time of arrival and intensity of each reflection
         that arrives at the listening position.
         """
+
+        never_terminates: typing.List[Shot]  = []
+        malformed: typing.List[Shot]  = []
+
         order = kwargs.get("order", 10)
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
@@ -391,7 +481,7 @@ class Room:
             temp_hits: typing.List[Reflection] = []
             total_dist: float = -direct_dist
             reflected_to_rfz = False
-            intensity = from_db(shot.intensity)
+            intensity = from_db(shot.gain)
             wall: typing.Union[Wall, None] = None
 
             dir = shot.dir
@@ -424,7 +514,7 @@ class Room:
                         for this_loc, tri_idx in sorted(
                             zip(loc, idx_tri), key=min_norm, reverse=False
                         ):
-                            if np.linalg.norm(source_pos - this_loc) == 0:
+                            if np.linalg.norm(source_pos - this_loc) < 1e-6:
                                 continue
                             new_source = this_loc
                             norm = mesh.face_normals[tri_idx]
@@ -454,7 +544,7 @@ class Room:
                 if dist_from_crit < self._lt.rfz_radius and i > 0:
                     # We only care about rays that reflect to the RFZ
                     reflected_to_rfz = True
-                    arrivals.append(Arrival(listen_pos, temp_hits.copy()))
+                    arrivals.append(Arrival(listen_pos, temp_hits.copy(), shot))
                     if not isinstance(wall, Wall):
                         raise RuntimeError
 
@@ -463,6 +553,19 @@ class Room:
                 hits.append(temp_hits)
 
             arrivals.sort(key=lambda a: a.total_dist)
+
+        with open("nonterminating_rays.json", "a") as f:
+            for shot in never_terminates:
+                f.write(shot.spec.to_json())
+                f.write("\n")
+        with open("malformed.json", "a") as f:
+            for shot in malformed:
+                f.write(shot.spec.to_json())
+                f.write("\n")
+        with open("arrivals.json", "a") as f:
+            for arrival in arrivals:
+                f.write(arrival.shot.spec.to_json())
+                f.write("\n")
 
         return arrivals
 
