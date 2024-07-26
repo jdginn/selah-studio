@@ -79,7 +79,7 @@ class Source:
         """
         shot_spec = ShotSpecification(pitch, yaw)
         normal = geometry.dir_from_points(source_pos, listening_pos)
-        pitch_rads = pitch / 180 * np.pi
+        pitch_rads = pitch / 180 * math.pi
         pitch_matrix = np.array(
             [
                 [math.cos(pitch_rads), 0, -math.sin(pitch_rads)],
@@ -87,7 +87,7 @@ class Source:
                 [math.sin(pitch_rads), 0, math.cos(pitch_rads)],
             ]
         )
-        yaw_rads = pitch / 180 * np.pi
+        yaw_rads = yaw / 180 * math.pi
         yaw_matrix = np.array(
             [
                 [math.cos(yaw_rads), math.sin(yaw_rads), 0],
