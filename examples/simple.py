@@ -1,4 +1,3 @@
-import argparse
 from dataclasses import dataclass
 import typing
 import trimesh
@@ -64,7 +63,6 @@ class parameters:
     rfz_radius: float = 0.3
     num_samples: int = 10_000
     max_time: float = 80 / 1000
-
     min_gain: float = -15
     order: int = 4
 
