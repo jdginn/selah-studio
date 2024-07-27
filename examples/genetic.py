@@ -119,7 +119,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         genetic_params.ceiling_diffuser_width,
         genetic_params.ceiling_diffuser_position,
     )
-    l_arrivals = room.trace(
+    l_arrivals = room.trace_arrivals(
         room._lt.source,
         room._lt.l_source(),
         room._lt.listening_pos(),
@@ -128,7 +128,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         min_gain=fixed_params.min_gain,
         order=fixed_params.order,
     )
-    r_arrivals = room.trace(
+    r_arrivals = room.trace_arrivals(
         room._lt.source,
         room._lt.r_source(),
         room._lt.listening_pos(),

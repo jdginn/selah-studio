@@ -103,7 +103,7 @@ if __name__ == "__main__":
         params.ceiling_diffuser_width,
         params.ceiling_diffuser_position,
     )
-    l_arrivals = room.trace(
+    l_arrivals = room.trace_arrivals(
         room._lt.source,
         room._lt.l_source(),
         room._lt.listening_pos(),
@@ -112,7 +112,7 @@ if __name__ == "__main__":
         min_gain=params.min_gain,
         order=params.order,
     )
-    r_arrivals = room.trace(
+    r_arrivals = room.trace_arrivals(
         room._lt.source,
         room._lt.r_source(),
         room._lt.listening_pos(),
