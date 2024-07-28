@@ -375,6 +375,7 @@ class Room:
         order: int = 10,
         max_time: float = 60,
         min_gain: float = -20,
+        ignore_walls: typing.List[str] = [],
     ) -> typing.Tuple[typing.List[Reflection], typing.Union[Arrival, None]]:
         source_pos = orig_source_pos
         temp_hits: typing.List[Reflection] = []
@@ -433,16 +434,19 @@ class Room:
             # Check whether this reflection passes within the RFZ
             dist_from_crit = geometry.lineseg_dist(new_source, source_pos, listen_pos)
             total_dist = total_dist + float(np.linalg.norm(new_source - source_pos))
+            source_pos = new_source
             # Only check out to some number of ms
             if total_dist / SPEED_OF_SOUND > max_time:
                 break
             # Only check out to some minimum gain
             if db(intensity) < min_gain:
                 break
+            if i > 0:
+                if temp_hits[-2].wall.name in ignore_walls:
+                    continue
             if dist_from_crit < rfz_radius and i > 0:
                 # We only care about rays that reflect to the RFZ
                 return temp_hits, Arrival(listen_pos, temp_hits, shot)
-            source_pos = new_source
 
         return temp_hits, None
 
@@ -462,6 +466,7 @@ class Room:
         max_time = kwargs.get("max_time", 0.1)
         min_gain = kwargs.get("min_gain", -20)
         num_samples = int(kwargs.get("num_samples", 10))
+        ignore_walls = kwargs.get("ignore_walls", [])
         self._max_time = max_time
         self._min_gain = min_gain
 
@@ -479,6 +484,7 @@ class Room:
                 order,
                 max_time,
                 min_gain,
+                ignore_walls,
             )
             if arrival is not None:
                 arrivals.append(arrival)
