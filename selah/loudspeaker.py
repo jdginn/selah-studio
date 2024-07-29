@@ -37,12 +37,12 @@ class Shot:
     pos: npt.NDArray
     dir: npt.NDArray
     gain: float
-    source: "Source"
+    source: "Loudspeaker"
     spec: ShotSpecification = field(default_factory=ShotSpecification)
     total_dist: float = 0
 
 
-class Source:
+class Loudspeaker:
     """Dispersions in degrees"""
 
     # Takes arguments mapping degrees to gain in dB

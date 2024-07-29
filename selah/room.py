@@ -12,7 +12,7 @@ from . import geometry
 from .exceptions import SelahException
 from .material import MaterialManager
 from .sound import SPEED_OF_SOUND, db, from_db
-from .source import Source, Shot
+from .loudspeaker import Loudspeaker, Shot
 from .wall import Axis, Wall, build_wall_from_point
 
 
@@ -55,7 +55,7 @@ class ListeningTriangle:
         height: float,
         dist_from_wall: float,
         dist_from_center: float,
-        source: Source,
+        source: Loudspeaker,
         rfz_radius: float,
         **kwargs,
     ) -> None:
@@ -218,7 +218,7 @@ class Room:
         height: float,
         dist_from_wall: float,
         dist_from_center: float,
-        source: Source,
+        source: Loudspeaker,
         rfz_radius: float,
         **kwargs,
     ) -> None:
@@ -475,7 +475,7 @@ class Room:
 
     def trace_arrivals(
         self,
-        source: Source,
+        source: Loudspeaker,
         source_pos: npt.NDArray,
         listen_pos: npt.NDArray,
         **kwargs,

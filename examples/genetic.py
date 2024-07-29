@@ -8,7 +8,7 @@ import pygad
 
 from selah.room import Arrival, Room
 from selah.material import MaterialManager, Material
-from selah.source import Source
+from selah.source import Loudspeaker
 from selah.wall import Wall
 from selah.exceptions import SelahException
 from selah.sound import SPEED_OF_SOUND
@@ -104,7 +104,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
         dist_from_wall=genetic_params.dist_from_wall,
         dist_from_center=genetic_params.dist_from_center,
         deviation=genetic_params.deviation_from_equilateral,
-        source=Source(
+        source=Loudspeaker(
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),

@@ -4,7 +4,7 @@ import trimesh
 import matplotlib.pyplot as plt
 
 from selah.material import MaterialManager, Material
-from selah.source import Source
+from selah.loudspeaker import Loudspeaker
 from selah.wall import Wall
 from selah.exceptions import SelahException
 from selah.room import Room
@@ -86,7 +86,7 @@ if __name__ == "__main__":
         dist_from_wall=params.dist_from_wall,
         dist_from_center=params.dist_from_center,
         deviation=params.deviation_from_equilateral,
-        source=Source(
+        source=Loudspeaker(
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),
