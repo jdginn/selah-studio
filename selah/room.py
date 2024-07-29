@@ -11,8 +11,9 @@ import trimesh
 from . import geometry
 from .exceptions import SelahException
 from .material import MaterialManager
+from .loudspeaker import Loudspeaker
 from .sound import SPEED_OF_SOUND, db, from_db
-from .loudspeaker import Loudspeaker, Shot
+from .source import Source, Shot, Reflection
 from .wall import Axis, Wall, build_wall_from_point
 
 
@@ -26,20 +27,6 @@ class ObscuresWindow(SelahException):
 
 class ListeningPositionError(SelahException):
     """Indicates the listening position has been placed outside the valid area"""
-
-
-class ShotException(SelahException):
-    """Indicates an exception while processing a shot"""
-
-    def __init__(self, shot: Shot):
-        self.shot = shot
-
-
-class ReflectionException(SelahException):
-    """Indicates an exception while processing a reflection"""
-
-    def __init__(self, reflection: "Reflection"):
-        self.reflection = reflection
 
 
 class ListeningTriangle:
@@ -143,60 +130,6 @@ class ListeningTriangle:
                 raise RuntimeError
 
 
-@dataclass
-class Arrival:
-    """
-    Represents a ray that arrives at a target zone
-
-    Target zone is typically a reflection-free zone
-    """
-
-    pos: np.ndarray
-    parent: "Arrival"
-
-
-@dataclass
-class Reflection:
-    """
-    Represents a discrete sound reflection off of a surface.
-    """
-
-    pos: np.ndarray
-    wall: typing.Union[Wall, None]
-    parent: typing.Union["Reflection", Shot]
-    intensity: float
-    total_dist: float
-    # For visualization purposes
-    _color: str = ""
-
-    def color(self, default: str) -> str:
-        if self._color != "":
-            return self._color
-        self._color = default
-        return default
-
-    def shot(self) -> Shot:
-        while True:
-            if isinstance(self.parent, Shot):
-                return self.parent
-            if not isinstance(self.parent, "Reflection"):
-                raise ReflectionException("Reflection does not originate from a shot")
-
-    #
-    # def total_dist(self) -> float:
-    #     total_dist: float = 0
-    #     while True:
-    #         if isinstance(self.parent, Shot):
-    #             total_dist += float(np.linalg.norm(self.pos - self.parent.pos))
-    #             return total_dist
-    #         if isinstance(self.parent, "Reflection"):
-    #             total_dist += float(np.linalg.norm(self.pos - self.parent.pos))
-    #         raise ReflectionException("Invalid parent type for reflection")
-
-
-Arrival = typing.Union[Reflection, Shot]
-
-
 class Room:
     """
     Models a room for acoustic purposes.
@@ -294,67 +227,67 @@ class Room:
         )
         pass
 
-    def corner_wall(
-        self,
-        name: str,
-        wall_names: typing.Tuple[str, str],
-        x_pos: float = 0.25,
-        y_pos: float = 0.25,
-        height: float = 0,
-        inclination: float = 0,
-        **kwargs,
-    ) -> Wall:
-        """Adds a wall straddling a corner of the room at the specified location and angle."""
-        # TODO: support using walls to define this
-        x_wall, y_wall = wall_names
-        xw = self.get_wall(x_wall)
-        yw = self.get_wall(y_wall)
-        shared_vertices = []
-        for i, v in enumerate(xw.mesh.vertices):
-            for j, vv in enumerate(yw.mesh.vertices):
-                if np.all(np.array(v) == np.array(vv)):
-                    shared_vertices.append((i, j, v))
-        x_faces: npt.NDArray
-        y_faces: npt.NDArray
-        shared_vertex_at_zero: npt.NDArray
-        for i, j, v in shared_vertices:
-            if v[2] == 0:
-                shared_vertex_at_zero = v
-                x_faces = xw.mesh.faces[xw.mesh.vertex_faces[i]]
-                y_faces = yw.mesh.faces[yw.mesh.vertex_faces[j]]
-                break
-        xdir = npt.NDArray
-        ydir = npt.NDArray
-        for f in x_faces:
-            for i in f:
-                v = xw.vertices[i]
-                if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
-                    xdir = geometry.dir_from_points(shared_vertex_at_zero, v)
-                    break
-        for f in y_faces:
-            for i in f:
-                v = yw.vertices[i]
-                if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
-                    ydir = geometry.dir_from_points(shared_vertex_at_zero, v)
-                    break
-        xpoint = shared_vertex_at_zero + x_pos * xdir
-        ypoint = shared_vertex_at_zero + y_pos * ydir
-        midpoint = xpoint + (ypoint - xpoint) / 2 + np.array([0, 0, height])
-        i_rad = inclination * np.pi / 180
-        pitch = np.array(
-            [
-                [math.cos(i_rad), 0, -math.sin(i_rad)],
-                [0, 1, 0],
-                [math.sin(i_rad), 0, math.cos(i_rad)],
-            ]
-        )
-        line_dir = geometry.dir_from_points(xpoint, midpoint)
-        norm = np.array([line_dir[1], -line_dir[0], 0]).dot(pitch)
-        w = build_wall_from_point(
-            name, self.mesh, midpoint, norm, self._mm.get_wall("back_corners")
-        )
-        self.walls.append(w)
-        return w
+    # def corner_wall(
+    #     self,
+    #     name: str,
+    #     wall_names: typing.Tuple[str, str],
+    #     x_pos: float = 0.25,
+    #     y_pos: float = 0.25,
+    #     height: float = 0,
+    #     inclination: float = 0,
+    #     **kwargs,
+    # ) -> Wall:
+    #     """Adds a wall straddling a corner of the room at the specified location and angle."""
+    #     # TODO: support using walls to define this
+    #     x_wall, y_wall = wall_names
+    #     xw = self.get_wall(x_wall)
+    #     yw = self.get_wall(y_wall)
+    #     shared_vertices = []
+    #     for i, v in enumerate(xw.mesh.vertices):
+    #         for j, vv in enumerate(yw.mesh.vertices):
+    #             if np.all(np.array(v) == np.array(vv)):
+    #                 shared_vertices.append((i, j, v))
+    #     x_faces: npt.NDArray
+    #     y_faces: npt.NDArray
+    #     shared_vertex_at_zero: npt.NDArray
+    #     for i, j, v in shared_vertices:
+    #         if v[2] == 0:
+    #             shared_vertex_at_zero = v
+    #             x_faces = xw.mesh.faces[xw.mesh.vertex_faces[i]]
+    #             y_faces = yw.mesh.faces[yw.mesh.vertex_faces[j]]
+    #             break
+    #     xdir = npt.NDArray
+    #     ydir = npt.NDArray
+    #     for f in x_faces:
+    #         for i in f:
+    #             v = xw.vertices[i]
+    #             if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
+    #                 xdir = geometry.dir_from_points(shared_vertex_at_zero, v)
+    #                 break
+    #     for f in y_faces:
+    #         for i in f:
+    #             v = yw.vertices[i]
+    #             if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
+    #                 ydir = geometry.dir_from_points(shared_vertex_at_zero, v)
+    #                 break
+    #     xpoint = shared_vertex_at_zero + x_pos * xdir
+    #     ypoint = shared_vertex_at_zero + y_pos * ydir
+    #     midpoint = xpoint + (ypoint - xpoint) / 2 + np.array([0, 0, height])
+    #     i_rad = inclination * np.pi / 180
+    #     pitch = np.array(
+    #         [
+    #             [math.cos(i_rad), 0, -math.sin(i_rad)],
+    #             [0, 1, 0],
+    #             [math.sin(i_rad), 0, math.cos(i_rad)],
+    #         ]
+    #     )
+    #     line_dir = geometry.dir_from_points(xpoint, midpoint)
+    #     norm = np.array([line_dir[1], -line_dir[0], 0]).dot(pitch)
+    #     w = build_wall_from_point(
+    #         name, self.mesh, midpoint, norm, self._mm.get_wall("back_corners")
+    #     )
+    #     self.walls.append(w)
+    #     return w
 
     @property
     def mesh(self) -> trimesh.Trimesh:
@@ -392,13 +325,13 @@ class Room:
         max_time: float = 60,
         min_gain: float = -20,
         ignore_walls: typing.List[str] = [],
-    ) -> typing.Tuple[Arrival, bool]:
+    ) -> typing.Tuple[Source, bool]:
         source_pos = orig_source_pos
-        last_source: typing.Union[Shot, Reflection] = shot
+        last_source: Source = shot
         direct_dist = np.linalg.norm(source_pos - listen_pos)
         total_dist: float = -float(direct_dist)
         intensity = from_db(shot.gain)
-        wall: typing.Union[Wall, None] = None
+        wall: Wall
 
         # First, check whether this ray intersects the rfz. If so, return.
         # If not, check subsequent reflections of this ray.
@@ -407,7 +340,7 @@ class Room:
         dir = shot.dir
         for i in range(order):
             norm: npt.NDArray = np.empty(3)
-            new_source: npt.NDArray = np.empty(3)
+            new_pos: npt.NDArray = np.empty(3)
 
             idx_tri, _, loc = intersector.intersects_id(
                 [source_pos],
@@ -424,7 +357,11 @@ class Room:
                     raise SelahException("Reflected ray never terminates")
                 case 1:
                     if np.linalg.norm(source_pos - loc[0]) > 0:
-                        new_source = loc[0]
+                        new_pos = loc[0]
+                        if mesh.face_normals is None:
+                            raise SelahException(
+                                "code bug: face_normals should never return None"
+                            )
                         norm = mesh.face_normals[idx_tri[0]]
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(idx_tri[0])
@@ -436,7 +373,11 @@ class Room:
                     ):
                         if np.linalg.norm(source_pos - this_loc) < 1e-6:
                             continue
-                        new_source = this_loc
+                        new_pos = this_loc
+                        if mesh.face_normals is None:
+                            raise SelahException(
+                                "code bug: face_normals should never return None"
+                            )
                         norm = mesh.face_normals[tri_idx]
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(tri_idx)
@@ -447,26 +388,22 @@ class Room:
                         raise SelahException("Malformed reflection")
 
             # Check whether this reflection passes within the RFZ
-            dist_from_crit = geometry.lineseg_dist(new_source, source_pos, listen_pos)
-            total_dist = total_dist + float(np.linalg.norm(new_source - source_pos))
+            dist_from_crit = geometry.lineseg_dist(new_pos, source_pos, listen_pos)
+            total_dist = total_dist + float(np.linalg.norm(new_pos - source_pos))
 
-            last_source = Reflection(
-                new_source, wall, last_source, intensity, total_dist
-            )
+            last_source = Reflection(new_pos, intensity, total_dist, last_source, wall)
 
-            source_pos = new_source
+            source_pos = new_pos
             # Only check out to some number of ms
             if total_dist / SPEED_OF_SOUND > max_time:
                 break
             # Only check out to some minimum gain
             if db(intensity) < min_gain:
                 break
-            if i > 1:
-                prev_source = last_source.parent
-                if isinstance(prev_source, Reflection):
-                    if prev_source.wall is not None:
-                        if prev_source.wall.name in ignore_walls:
-                            continue
+            prev_source = last_source.parent
+            if isinstance(prev_source, Reflection):
+                if prev_source.wall.name in ignore_walls:
+                    continue
             if dist_from_crit < rfz_radius and i > 0:
                 # We only care about rays that reflect to the RFZ
                 return last_source, True
@@ -479,7 +416,7 @@ class Room:
         source_pos: npt.NDArray,
         listen_pos: npt.NDArray,
         **kwargs,
-    ) -> typing.List[Arrival]:
+    ) -> typing.List[Source]:
         """
         Uses ray tracing to determine time of arrival and intensity of each reflection
         that arrives at the listening position.
@@ -496,8 +433,8 @@ class Room:
         shots = source.get_shots(source_pos, listen_pos, num_samples)
         mesh = self.mesh
 
-        arrivals: typing.List[Arrival] = []
-        for i, shot in enumerate(shots):
+        arrivals: typing.List[Source] = []
+        for shot in shots:
             arrival, intersects_rfz = self.trace_shot(
                 mesh,
                 shot,
@@ -573,7 +510,7 @@ class Room:
     def plot_arrivals(
         self,
         fig,
-        arrivals: typing.List[Arrival],
+        arrivals: typing.List[Source],
         manually_advance=False,
     ):
         """
@@ -594,36 +531,42 @@ class Room:
             color = colors[i % len(colors)]
             ax3.bar(
                 a.total_dist / SPEED_OF_SOUND * 1000,
-                bottom=db(a.intensity),
+                bottom=db(a.gain),
                 height=self._min_gain,
                 color=a.color(color),
                 picker=True,
             )
-            for h in a.reflection_list:
-                if manually_advance:
-                    plt.waitforbuttonpress()
-                ax1.scatter(h.pos[0], h.pos[1])
-                ax1.plot(
-                    [h.pos[0], h.parent[0]],
-                    [h.pos[1], h.parent[1]],
-                    marker="o",
-                    color=h.color(color),
-                    linewidth=4 * h.intensity,
-                )
-                ax2.scatter(h.pos[0], h.pos[2])
-                ax2.plot(
-                    [h.pos[0], h.parent[0]],
-                    [h.pos[2], h.parent[2]],
-                    marker="o",
-                    color=h.color(color),
-                    linewidth=4 * h.intensity,
-                )
-                plt.draw()
+            # TODO: this needs to walk back the linked list
+            h = a
+            while True:
+                if isinstance(h, Shot):
+                    break
+                if isinstance(h, Reflection):
+                    if manually_advance:
+                        plt.waitforbuttonpress()
+                    ax1.scatter(h.pos[0], h.pos[1])
+                    ax1.plot(
+                        [h.pos[0], h.parent.pos[0]],
+                        [h.pos[1], h.parent.pos[1]],
+                        marker="o",
+                        color=h.color(color),
+                        linewidth=4 * h.gain,
+                    )
+                    ax2.scatter(h.pos[0], h.pos[2])
+                    ax2.plot(
+                        [h.pos[0], h.parent.pos[0]],
+                        [h.pos[2], h.parent.pos[2]],
+                        marker="o",
+                        color=h.color(color),
+                        linewidth=4 * h.gain,
+                    )
+                    h = h.parent
+            plt.draw()
 
     def plot_arrivals_interactive(
         self,
         fig,
-        arrivals: typing.List[Arrival],
+        arrivals: typing.List[Source],
         manually_advance=False,
     ):
         """

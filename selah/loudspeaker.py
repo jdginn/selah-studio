@@ -1,5 +1,3 @@
-from dataclasses import dataclass, field
-from dataclasses_json import dataclass_json
 import math
 import typing
 
@@ -9,37 +7,13 @@ import trimesh
 
 from . import geometry
 
+from selah.source import Shot, ShotSpecification
+
 kh420_horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100}
 kh420_vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30}
 
 kh310_horiz_disp: dict[float, float] = {0: 0, 30: 0, 50: -3, 70: -6, 80: -9, 90: -20}
 kh310_vert_disp: dict[float, float] = {0: 0, 30: -3, 60: -6, 90: -9, 100: -30}
-
-
-@dataclass_json
-@dataclass
-class ShotSpecification:
-    # source: str
-    pitch: float = 0
-    yaw: float = 0
-
-
-@dataclass
-class Shot:
-    """
-    Represents the origin of a ray of sound, including its direction, intensity,
-    and any other initial information required to predict its behavior.
-
-    Degrees in angles.
-    Intensity in dB.
-    """
-
-    pos: npt.NDArray
-    dir: npt.NDArray
-    gain: float
-    source: "Loudspeaker"
-    spec: ShotSpecification = field(default_factory=ShotSpecification)
-    total_dist: float = 0
 
 
 class Loudspeaker:
@@ -110,8 +84,9 @@ class Loudspeaker:
         new_dir = new_dir / np.linalg.norm(new_dir)
         return Shot(
             source_pos,
-            new_dir,
             self.gain(pitch, yaw),
+            0,
+            new_dir,
             self,
             shot_spec,
         )
@@ -119,11 +94,15 @@ class Loudspeaker:
     def get_shots(
         self, source_pos: npt.NDArray, listening_pos: npt.NDArray, num_rays: int = 1000
     ) -> typing.List[Shot]:
-        """Returns num_rays shots shot from this speaker"""
+        """Returns num_rays of shots to be shot from this speaker"""
         # TODO: this should probably be an iterator rather than return a list
         shots: typing.List[Shot] = [
             Shot(
-                source_pos, geometry.dir_from_points(source_pos, listening_pos), 0, self
+                source_pos,
+                0,
+                0,
+                geometry.dir_from_points(source_pos, listening_pos),
+                self,
             )
         ]
         SIMULATION_DISPERSION_RANGE = 180

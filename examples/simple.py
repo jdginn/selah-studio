@@ -61,7 +61,7 @@ class parameters:
     ceiling_diffuser_width: float = 1.0
     ceiling_diffuser_position: float = 1.5
     rfz_radius: float = 0.3
-    num_samples: int = 100_000
+    num_samples: int = 10_000
     max_time: float = 80 / 1000
     min_gain: float = -20
     order: int = 7
