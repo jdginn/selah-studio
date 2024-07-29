@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import math
 import typing
 
@@ -7,6 +6,7 @@ import matplotlib.patches as patches
 import numpy as np
 import numpy.typing as npt
 import trimesh
+from trimesh.ray import ray_triangle
 
 from . import geometry
 from .exceptions import SelahException
@@ -336,13 +336,14 @@ class Room:
         # First, check whether this ray intersects the rfz. If so, return.
         # If not, check subsequent reflections of this ray.
 
-        intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
+        intersector = ray_triangle.RayMeshIntersector(mesh)
         dir = shot.dir
         for i in range(order):
             norm: npt.NDArray = np.empty(3)
             new_pos: npt.NDArray = np.empty(3)
 
-            idx_tri, _, loc = intersector.intersects_id(
+            idx_tri, _, loc = intersector.intersects_id(  # type:ignore
+                # This method has multiple return signatures. Since return_locations=True, we know we are accepting the right signature here.
                 [source_pos],
                 [dir],
                 return_locations=True,
@@ -366,6 +367,9 @@ class Room:
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(idx_tri[0])
                         intensity = intensity * (1 - wall.material.absorption())
+                        last_source = Reflection(
+                            new_pos, intensity, total_dist, last_source, wall
+                        )
                 case _:
                     found = False
                     for this_loc, tri_idx in sorted(
@@ -382,6 +386,9 @@ class Room:
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(tri_idx)
                         intensity = intensity * (1 - wall.material.absorption())
+                        last_source = Reflection(
+                            new_pos, intensity, total_dist, last_source, wall
+                        )
                         found = True
                         break
                     if not found:
@@ -391,8 +398,6 @@ class Room:
             dist_from_crit = geometry.lineseg_dist(new_pos, source_pos, listen_pos)
             total_dist = total_dist + float(np.linalg.norm(new_pos - source_pos))
 
-            last_source = Reflection(new_pos, intensity, total_dist, last_source, wall)
-
             source_pos = new_pos
             # Only check out to some number of ms
             if total_dist / SPEED_OF_SOUND > max_time:
@@ -400,10 +405,11 @@ class Room:
             # Only check out to some minimum gain
             if db(intensity) < min_gain:
                 break
-            prev_source = last_source.parent
-            if isinstance(prev_source, Reflection):
-                if prev_source.wall.name in ignore_walls:
-                    continue
+            if isinstance(last_source, Reflection):
+                prev_source = last_source.parent
+                if isinstance(prev_source, Reflection):
+                    if prev_source.wall.name in ignore_walls:
+                        continue
             if dist_from_crit < rfz_radius and i > 0:
                 # We only care about rays that reflect to the RFZ
                 return last_source, True
@@ -462,7 +468,7 @@ class Room:
         plt.scatter(
             self._lt.r_source()[0], self._lt.r_source()[1], marker="x", linewidth=8
         )
-        circle = plt.Circle(
+        circle = patches.Circle(
             (self._lt.listening_pos()[0], self._lt.listening_pos()[1]),
             self._lt.rfz_radius,
             fill=False,
@@ -473,7 +479,7 @@ class Room:
 
         # sec = self.mesh.section((0, 0, 1), (0, 0, self._lt.speaker_height))
         sec = self.mesh.section((0, 0, 1), (0, 0, 0))
-        if sec is None:
+        if not isinstance(sec, trimesh.path.Path3D):
             raise RuntimeError
         outline = sec.to_planar()[0]
         outline.apply_translation((-outline.bounds[0][0], -outline.bounds[0][1]))
@@ -489,7 +495,7 @@ class Room:
         plt.scatter(
             self._lt.r_source()[0], self._lt.r_source()[2], marker="x", linewidth=8
         )
-        circle = plt.Circle(
+        circle = patches.Circle(
             (self._lt.listening_pos()[0], self._lt.listening_pos()[2]),
             self._lt.rfz_radius,
             fill=False,
@@ -499,9 +505,9 @@ class Room:
         plt.draw()
 
         sec = self.mesh.section((0, 1, 0), (0, 3, 0))
-        if sec is None:
+        if not isinstance(sec, trimesh.path.Path3D):
             raise RuntimeError
-        outline: trimesh.path.Path2D = sec.to_planar()[0]
+        outline = sec.to_planar()[0]
         outline.apply_transform(((0, -1, 0), (-1, 0, 0), (0, 0, 1)))
         # Rotate outline by 90deg
         outline.apply_translation((-outline.bounds[0][0], -outline.bounds[0][1]))
