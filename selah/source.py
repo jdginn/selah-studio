@@ -15,12 +15,14 @@ kh420_vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30}
 kh310_horiz_disp: dict[float, float] = {0: 0, 30: 0, 50: -3, 70: -6, 80: -9, 90: -20}
 kh310_vert_disp: dict[float, float] = {0: 0, 30: -3, 60: -6, 90: -9, 100: -30}
 
+
 @dataclass_json
 @dataclass
 class ShotSpecification:
     # source: str
     pitch: float = 0
     yaw: float = 0
+
 
 @dataclass
 class Shot:
@@ -32,10 +34,13 @@ class Shot:
     Intensity in dB.
     """
 
+    pos: npt.NDArray
     dir: npt.NDArray
     gain: float
-    source: typing.Any = None
+    source: "Source"
     spec: ShotSpecification = field(default_factory=ShotSpecification)
+    total_dist: float = 0
+
 
 class Source:
     """Dispersions in degrees"""
@@ -71,7 +76,13 @@ class Source:
         self._y_offset = y_offset
         self._z_offset = z_offset
 
-    def get_shot_from_angles(self, source_pos: npt.NDArray, listening_pos: npt.NDArray, pitch: float=0, yaw: float=0) -> Shot:
+    def get_shot_from_angles(
+        self,
+        source_pos: npt.NDArray,
+        listening_pos: npt.NDArray,
+        pitch: float = 0,
+        yaw: float = 0,
+    ) -> Shot:
         """
         Returns a shot fired from this speaker at the specified pitch and yaw offset from the direct path to the listening_pos
 
@@ -98,26 +109,35 @@ class Source:
         new_dir = yaw_matrix.dot(pitch_matrix).dot(normal)
         new_dir = new_dir / np.linalg.norm(new_dir)
         return Shot(
+            source_pos,
             new_dir,
             self.gain(pitch, yaw),
             self,
             shot_spec,
         )
 
-    def get_shots(self, source_pos: npt.NDArray, listening_pos: npt.NDArray, num_rays: int=1000) -> typing.List[Shot]:
+    def get_shots(
+        self, source_pos: npt.NDArray, listening_pos: npt.NDArray, num_rays: int = 1000
+    ) -> typing.List[Shot]:
         """Returns num_rays shots shot from this speaker"""
         # TODO: this should probably be an iterator rather than return a list
-        shots: typing.List[Shot] = [Shot(geometry.dir_from_points(source_pos, listening_pos), 0, self)]
-        SIMULATION_DISPERSION_RANGE=180
+        shots: typing.List[Shot] = [
+            Shot(
+                source_pos, geometry.dir_from_points(source_pos, listening_pos), 0, self
+            )
+        ]
+        SIMULATION_DISPERSION_RANGE = 180
         h_steps = int(math.floor(math.sqrt(num_rays)))
-        h_step_size = SIMULATION_DISPERSION_RANGE/ (h_steps - 1)
-        v_steps = num_rays// h_steps
-        v_step_size = SIMULATION_DISPERSION_RANGE/ (v_steps - 1)
+        h_step_size = SIMULATION_DISPERSION_RANGE / (h_steps - 1)
+        v_steps = num_rays // h_steps
+        v_step_size = SIMULATION_DISPERSION_RANGE / (v_steps - 1)
         for v in range(v_steps):
             pitch = -SIMULATION_DISPERSION_RANGE / 2 + v_step_size * v
             for h in range(h_steps):
                 yaw = -SIMULATION_DISPERSION_RANGE / 2 + h_step_size * h
-                shots.append(self.get_shot_from_angles(source_pos, listening_pos, pitch, yaw))
+                shots.append(
+                    self.get_shot_from_angles(source_pos, listening_pos, pitch, yaw)
+                )
         return shots
 
     def gain(self, vert_angle: float, horiz_angle: float) -> float:

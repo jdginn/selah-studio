@@ -61,10 +61,10 @@ class parameters:
     ceiling_diffuser_width: float = 1.0
     ceiling_diffuser_position: float = 1.5
     rfz_radius: float = 0.3
-    num_samples: int = 10_000
+    num_samples: int = 100_000
     max_time: float = 80 / 1000
-    min_gain: float = -15
-    order: int = 4
+    min_gain: float = -20
+    order: int = 7
 
 
 if __name__ == "__main__":
@@ -90,7 +90,7 @@ if __name__ == "__main__":
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),
-        rfz_radius=0.3,
+        rfz_radius=params.rfz_radius,
     )
     listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
@@ -111,6 +111,7 @@ if __name__ == "__main__":
         max_time=params.max_time,
         min_gain=params.min_gain,
         order=params.order,
+        ignore_walls="Floor",
     )
     r_arrivals = room.trace_arrivals(
         room._lt.source,
@@ -120,6 +121,7 @@ if __name__ == "__main__":
         max_time=params.max_time,
         min_gain=params.min_gain,
         order=params.order,
+        ignore_walls="Floor",
     )
     arrivals = l_arrivals + r_arrivals
 

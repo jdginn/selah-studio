@@ -28,6 +28,20 @@ class ListeningPositionError(SelahException):
     """Indicates the listening position has been placed outside the valid area"""
 
 
+class ShotException(SelahException):
+    """Indicates an exception while processing a shot"""
+
+    def __init__(self, shot: Shot):
+        self.shot = shot
+
+
+class ReflectionException(SelahException):
+    """Indicates an exception while processing a reflection"""
+
+    def __init__(self, reflection: "Reflection"):
+        self.reflection = reflection
+
+
 class ListeningTriangle:
     """
     Represents a listening triangle composed of two sound sources and a listener.
@@ -130,6 +144,18 @@ class ListeningTriangle:
 
 
 @dataclass
+class Arrival:
+    """
+    Represents a ray that arrives at a target zone
+
+    Target zone is typically a reflection-free zone
+    """
+
+    pos: np.ndarray
+    parent: "Arrival"
+
+
+@dataclass
 class Reflection:
     """
     Represents a discrete sound reflection off of a surface.
@@ -137,7 +163,7 @@ class Reflection:
 
     pos: np.ndarray
     wall: typing.Union[Wall, None]
-    parent: np.ndarray
+    parent: typing.Union["Reflection", Shot]
     intensity: float
     total_dist: float
     # For visualization purposes
@@ -149,36 +175,26 @@ class Reflection:
         self._color = default
         return default
 
+    def shot(self) -> Shot:
+        while True:
+            if isinstance(self.parent, Shot):
+                return self.parent
+            if not isinstance(self.parent, "Reflection"):
+                raise ReflectionException("Reflection does not originate from a shot")
 
-class Arrival:
-    """
-    Represents a series of reflections that arrives at a given position. Allows tracing the full
-    path of reflections that were required to reach the position.
-    """
+    #
+    # def total_dist(self) -> float:
+    #     total_dist: float = 0
+    #     while True:
+    #         if isinstance(self.parent, Shot):
+    #             total_dist += float(np.linalg.norm(self.pos - self.parent.pos))
+    #             return total_dist
+    #         if isinstance(self.parent, "Reflection"):
+    #             total_dist += float(np.linalg.norm(self.pos - self.parent.pos))
+    #         raise ReflectionException("Invalid parent type for reflection")
 
-    pos: np.ndarray
-    parent: Reflection
-    shot: Shot
-    reflection_list: typing.List[Reflection]
-    # For visualization purposes
-    _color: str
 
-    def __init__(
-        self, pos: npt.NDArray, reflections: typing.List[Reflection], shot: Shot
-    ):
-        self.pos = pos
-        self.reflection_list = reflections
-        self.shot = shot
-        self.parent = reflections[-1]
-        self.intensity = self.parent.intensity
-        self.total_dist = self.parent.total_dist + np.linalg.norm(pos - self.parent.pos)
-        self._color = ""
-
-    def color(self, default: str) -> str:
-        if self._color != "":
-            return self._color
-        self._color = default
-        return default
+Arrival = typing.Union[Reflection, Shot]
 
 
 class Room:
@@ -376,13 +392,16 @@ class Room:
         max_time: float = 60,
         min_gain: float = -20,
         ignore_walls: typing.List[str] = [],
-    ) -> typing.Tuple[typing.List[Reflection], typing.Union[Arrival, None]]:
+    ) -> typing.Tuple[Arrival, bool]:
         source_pos = orig_source_pos
-        temp_hits: typing.List[Reflection] = []
+        last_source: typing.Union[Shot, Reflection] = shot
         direct_dist = np.linalg.norm(source_pos - listen_pos)
         total_dist: float = -float(direct_dist)
         intensity = from_db(shot.gain)
         wall: typing.Union[Wall, None] = None
+
+        # First, check whether this ray intersects the rfz. If so, return.
+        # If not, check subsequent reflections of this ray.
 
         intersector = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
         dir = shot.dir
@@ -427,13 +446,14 @@ class Room:
                     if not found:
                         raise SelahException("Malformed reflection")
 
-            temp_hits.append(
-                Reflection(new_source, wall, source_pos, intensity, total_dist)
-            )
-
             # Check whether this reflection passes within the RFZ
             dist_from_crit = geometry.lineseg_dist(new_source, source_pos, listen_pos)
             total_dist = total_dist + float(np.linalg.norm(new_source - source_pos))
+
+            last_source = Reflection(
+                new_source, wall, last_source, intensity, total_dist
+            )
+
             source_pos = new_source
             # Only check out to some number of ms
             if total_dist / SPEED_OF_SOUND > max_time:
@@ -441,14 +461,17 @@ class Room:
             # Only check out to some minimum gain
             if db(intensity) < min_gain:
                 break
-            if i > 0:
-                if temp_hits[-2].wall.name in ignore_walls:
-                    continue
+            if i > 1:
+                prev_source = last_source.parent
+                if isinstance(prev_source, Reflection):
+                    if prev_source.wall is not None:
+                        if prev_source.wall.name in ignore_walls:
+                            continue
             if dist_from_crit < rfz_radius and i > 0:
                 # We only care about rays that reflect to the RFZ
-                return temp_hits, Arrival(listen_pos, temp_hits, shot)
+                return last_source, True
 
-        return temp_hits, None
+        return last_source, False
 
     def trace_arrivals(
         self,
@@ -475,7 +498,7 @@ class Room:
 
         arrivals: typing.List[Arrival] = []
         for i, shot in enumerate(shots):
-            _, arrival = self.trace_shot(
+            arrival, intersects_rfz = self.trace_shot(
                 mesh,
                 shot,
                 source_pos,
@@ -486,7 +509,7 @@ class Room:
                 min_gain,
                 ignore_walls,
             )
-            if arrival is not None:
+            if intersects_rfz:
                 arrivals.append(arrival)
 
         arrivals.sort(key=lambda a: a.total_dist)

@@ -49,16 +49,18 @@ wall_materials = {
 class ListeningPositionError(SelahException):
     """Indicates the listening position has been placed outside the valid area"""
 
+
 @dataclass
 class fixed_parameters:
     filename: str = "examples/resources/studio.3mf"
     rfz_radius: float = 0.3
-    num_samples: int = 10_000
+    num_samples: int = 80_000
     max_time: float = 80 / 1000
-    min_gain: float = -15
-    order: int = 4
+    min_gain: float = -18
+    order: int = 8
     max_listen_pos: float = 2.4
     min_listen_pos: float = 1.3
+
 
 @dataclass
 class training_parameters:
@@ -81,10 +83,10 @@ class training_parameters:
                 retlist.append([val])
         return retlist
 
+
 def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
     genetic_params = training_parameters(*solution)
     fixed_params = fixed_parameters()
-
 
     scene = trimesh.load(fixed_params.filename)
     if not isinstance(scene, trimesh.Scene):
@@ -160,7 +162,6 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
 
 
 if __name__ == "__main__":
-
     gene_space = training_parameters(
         speaker_height={"low": 1.3, "high": 2.3},
         dist_from_center={"low": 0.85, "high": 1.3},
@@ -172,7 +173,7 @@ if __name__ == "__main__":
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
     )
     ga_instance = pygad.GA(
-        num_generations=3,
+        num_generations=8,
         num_parents_mating=4,
         fitness_func=fitness_func,
         sol_per_pop=32,
@@ -184,7 +185,7 @@ if __name__ == "__main__":
         crossover_type="two_points",
         crossover_probability=0.7,
         keep_elitism=8,
-        # parallel_processing=["process", 32],
+        parallel_processing=["process", 32],
     )
     ga_instance.run()
 
