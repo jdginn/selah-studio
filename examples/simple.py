@@ -7,6 +7,7 @@ from selah.material import MaterialManager, Material
 from selah.loudspeaker import Loudspeaker
 from selah.wall import Wall
 from selah.exceptions import SelahException
+from selah.source import SourceException, Reflection
 from selah.room import Room
 
 materials: typing.Dict[str, Material] = {
@@ -61,7 +62,7 @@ class parameters:
     ceiling_diffuser_width: float = 1.0
     ceiling_diffuser_position: float = 1.5
     rfz_radius: float = 0.3
-    num_samples: int = 10_000
+    num_samples: int = 1_000
     max_time: float = 80 / 1000
     min_gain: float = -20
     order: int = 7
@@ -103,30 +104,38 @@ if __name__ == "__main__":
         params.ceiling_diffuser_width,
         params.ceiling_diffuser_position,
     )
-    l_arrivals = room.trace_arrivals(
-        room._lt.source,
-        room._lt.l_source(),
-        room._lt.listening_pos(),
-        num_samples=params.num_samples,
-        max_time=params.max_time,
-        min_gain=params.min_gain,
-        order=params.order,
-        ignore_walls="Floor",
-    )
-    r_arrivals = room.trace_arrivals(
-        room._lt.source,
-        room._lt.r_source(),
-        room._lt.listening_pos(),
-        num_samples=params.num_samples,
-        max_time=params.max_time,
-        min_gain=params.min_gain,
-        order=params.order,
-        ignore_walls="Floor",
-    )
-    arrivals = l_arrivals + r_arrivals
-
-    plt.ion()
-    fig = plt.figure()
-    room.plot_arrivals_interactive(fig, arrivals, False)
-    plt.show(block=True)
-    room.mesh.show()
+    try:
+        l_arrivals = room.trace_arrivals(
+            room._lt.source,
+            room._lt.l_source(),
+            room._lt.listening_pos(),
+            num_samples=params.num_samples,
+            max_time=params.max_time,
+            min_gain=params.min_gain,
+            order=params.order,
+            ignore_walls="Floor",
+        )
+        r_arrivals = room.trace_arrivals(
+            room._lt.source,
+            room._lt.r_source(),
+            room._lt.listening_pos(),
+            num_samples=params.num_samples,
+            max_time=params.max_time,
+            min_gain=params.min_gain,
+            order=params.order,
+            ignore_walls="Floor",
+        )
+        arrivals = l_arrivals + r_arrivals
+        plt.ion()
+        fig = plt.figure()
+        room.plot_arrivals_interactive(fig, arrivals, False)
+        plt.show(block=True)
+        room.mesh.show()
+    except SourceException as ex:
+        print(ex.message)
+        arrivals = [ex.source]
+        plt.ion()
+        fig = plt.figure()
+        room.plot_arrivals_interactive(fig, arrivals, False)
+        plt.show(block=True)
+        room.mesh.show()

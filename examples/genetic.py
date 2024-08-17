@@ -6,11 +6,12 @@ import trimesh
 import matplotlib.pyplot as plt
 import pygad
 
-from selah.room import Arrival, Room
+from selah.room import Room
 from selah.material import MaterialManager, Material
-from selah.source import Loudspeaker
 from selah.wall import Wall
+from selah.source import Source
 from selah.exceptions import SelahException
+from selah.loudspeaker import Loudspeaker
 from selah.sound import SPEED_OF_SOUND
 
 materials: typing.Dict[str, Material] = {
@@ -54,9 +55,9 @@ class ListeningPositionError(SelahException):
 class fixed_parameters:
     filename: str = "examples/resources/studio.3mf"
     rfz_radius: float = 0.3
-    num_samples: int = 80_000
+    num_samples: int = 8_000
     max_time: float = 80 / 1000
-    min_gain: float = -18
+    min_gain: float = -16
     order: int = 8
     max_listen_pos: float = 2.4
     min_listen_pos: float = 1.3
@@ -84,7 +85,7 @@ class training_parameters:
         return retlist
 
 
-def get_arrivals(solution) -> tuple[Room, typing.List[Arrival]]:
+def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
     genetic_params = training_parameters(*solution)
     fixed_params = fixed_parameters()
 
@@ -155,7 +156,6 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
     if len(arrivals) == 0:
         print(f"Too good to be true: {fixed_params.max_time * 1000}")
         return 0
-        return params.max_time * 1000
     ITD = float(arrivals[0].total_dist / SPEED_OF_SOUND * 1000)
     print(f"ITD: {ITD:.1f}")
     return ITD
