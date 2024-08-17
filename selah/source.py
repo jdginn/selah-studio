@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 import typing
@@ -8,15 +9,54 @@ from selah.wall import Wall
 from selah.exceptions import SelahException
 
 
-class ShotException(SelahException):
+class SourceException(ABC, SelahException):
+    """
+    Exception for issues tracing sources
+
+    Supports dumping debug data to JSON
+    """
+
+    @property
+    @abstractmethod
+    def source(self) -> "Source":
+        pass
+
+    @abstractmethod
+    def to_json(self) -> str:
+        """
+        Returns debug information formatted as a json string
+        """
+        pass
+
+
+class ShotException(SourceException):
     """Indicates an exception while processing a shot"""
 
-    def __init__(self, shot: "Shot"):
+    def __init__(self, shot: "Shot", message: str):
         self.shot = shot
+        self.message = message
+
+    @property
+    def source(self) -> "Shot":
+        return self.shot
+
+    def to_json(self) -> str:
+        return self.shot.spec.to_json()
 
 
-class ReflectionException(SelahException):
+class ReflectionException(SourceException):
     """Indicates an exception while processing a reflection"""
+
+    def __init__(self, reflection: "Reflection", message: str):
+        self.reflection = reflection
+        self.message = message
+
+    @property
+    def source(self) -> "Reflection":
+        return self.reflection
+
+    def to_json(self) -> str:
+        return self.reflection.to_json()
 
 
 @dataclass
@@ -61,6 +101,7 @@ class Shot(Source):
     spec: ShotSpecification = field(default_factory=ShotSpecification)
 
 
+@dataclass_json
 @dataclass
 class Reflection(Source):
     """
@@ -75,7 +116,9 @@ class Reflection(Source):
             if isinstance(self.parent, Shot):
                 return self.parent
             if not isinstance(self.parent, "Reflection"):
-                raise ReflectionException("Reflection does not originate from a shot")
+                raise ReflectionException(
+                    self, "Reflection does not originate from a shot"
+                )
 
     #
     # def total_dist(self) -> float:
