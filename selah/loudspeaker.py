@@ -6,6 +6,7 @@ import numpy.typing as npt
 import trimesh
 
 from . import geometry
+from . import sound
 
 from selah.source import Shot, ShotSpecification
 
@@ -84,7 +85,7 @@ class Loudspeaker:
         new_dir = new_dir / np.linalg.norm(new_dir)
         return Shot(
             source_pos,
-            self.gain(pitch, yaw),
+            sound.from_db(self.gain(pitch, yaw)),
             0,
             new_dir,
             self,
@@ -99,7 +100,7 @@ class Loudspeaker:
         shots: typing.List[Shot] = [
             Shot(
                 source_pos,
-                0,
+                1.0,
                 0,
                 geometry.dir_from_points(source_pos, listening_pos),
                 self,
