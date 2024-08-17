@@ -13,7 +13,7 @@ from .exceptions import SelahException
 from .material import MaterialManager
 from .loudspeaker import Loudspeaker
 from .sound import SPEED_OF_SOUND, db, from_db
-from .source import Source, Shot, Reflection
+from .source import Source, Shot, Reflection, ReflectionException, ShotException
 from .wall import Axis, Wall, build_wall_from_point
 
 
@@ -355,7 +355,16 @@ class Room:
 
             match len(loc):
                 case 0:
-                    raise SelahException("Reflected ray never terminates")
+                    if isinstance(last_source, Reflection):
+                        print("Never terminates")
+                        # raise ReflectionException(
+                        #     last_source, "Reflected ray never terminates"
+                        # )
+                    if isinstance(last_source, Shot):
+                        print("Never terminates")
+                        # raise ShotException(
+                        #     last_source, "Reflected ray never terminates"
+                        # )
                 case 1:
                     if np.linalg.norm(source_pos - loc[0]) > 0:
                         new_pos = loc[0]
@@ -392,7 +401,11 @@ class Room:
                         found = True
                         break
                     if not found:
-                        raise SelahException("Malformed reflection")
+                        if isinstance(last_source, Reflection):
+                            raise ReflectionException(
+                                last_source, "Malformed reflection"
+                            )
+                        raise SelahException("Malformed reflection with wrong type")
 
             # Check whether this reflection passes within the RFZ
             dist_from_crit = geometry.lineseg_dist(new_pos, source_pos, listen_pos)
