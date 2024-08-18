@@ -35,7 +35,7 @@ class Loudspeaker:
         z_margin: float = 0.05,
     ):
         """
-        Source represents a directional sound source.
+        Louspeaker represents a directional louspeaker.
 
         horiz_disp and vert_disp map dispersions angles in degrees to gain at that
         angle relative to the main acoustic axis in decibels.
@@ -147,3 +147,19 @@ class Loudspeaker:
             .apply_transform(rotation)
             .contains(test_point)[0]
         )
+
+    def test_intersection_mesh(
+        self, placement: npt.NDArray, norm: npt.NDArray, mesh: trimesh.Trimesh
+    ) -> bool:
+        """work in progress"""
+        box = trimesh.primitives.Box(np.array([self._x_dim, self._y_dim, self._z_dim]))
+        translation = trimesh.transformations.translation_matrix(
+            placement - np.array([0, self._y_offset, self._z_offset])
+        )
+        rotation = geometry.rotation_matrix(np.array([0, 0, 0]), norm)
+        intersection = (
+            box.apply_transform(translation)
+            .apply_transform(rotation)
+            .intersection(mesh)
+        )
+        return intersection is None
