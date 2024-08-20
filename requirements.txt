@@ -4,3 +4,4 @@ trimesh
 networkx
 lxml
 dataclasses_json
+pytest
