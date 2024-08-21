@@ -22,31 +22,6 @@ def lineseg_dist(a: npt.NDArray, b: npt.NDArray, p: npt.NDArray) -> npt.NDArray:
     return np.hypot(h, np.linalg.norm(c))
 
 
-def rotation_matrix(A: npt.NDArray, B: npt.NDArray) -> npt.NDArray:
-    """Returns the rotation matrix to rotate unit vector A to unit vector B"""
-
-    ax = A[0]
-    ay = A[1]
-    az = A[2]
-
-    bx = B[0]
-    by = B[1]
-    bz = B[2]
-
-    au = A / (np.sqrt(ax * ax + ay * ay + az * az))
-    bu = B / (np.sqrt(bx * bx + by * by + bz * bz))
-
-    R = np.array(
-        [
-            [bu[0] * au[0], bu[0] * au[1], bu[0] * au[2]],
-            [bu[1] * au[0], bu[1] * au[1], bu[1] * au[2]],
-            [bu[2] * au[0], bu[2] * au[1], bu[2] * au[2]],
-        ]
-    )
-
-    return R
-
-
 def dir_from_points(p1: npt.NDArray, p2: npt.NDArray) -> npt.NDArray:
     """Returns the unit vector representing the direction of a line segment between poitns p1 and p2"""
     unscaled = p2 - p1

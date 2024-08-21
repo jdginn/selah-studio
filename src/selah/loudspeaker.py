@@ -4,6 +4,8 @@ import typing
 import numpy as np
 import numpy.typing as npt
 import trimesh
+import trimesh.visual as tv
+import trimesh.proximity as prox
 
 from . import geometry
 from . import sound
@@ -50,6 +52,19 @@ class Loudspeaker:
         self._z_dim = z_dim
         self._y_offset = y_offset
         self._z_offset = z_offset
+
+    @property
+    def mesh(self) -> trimesh.Trimesh:
+        """
+        Returns a mesh representing this loudspeaker.
+
+        Mesh always places the front, bottom, left corner at the origin.
+        """
+        extents = np.array([self._x_dim, self._y_dim, self._z_dim])
+        mesh = trimesh.primitives.Box(np.array(extents))
+        mesh.apply_translation(extents / 2)
+        mesh.visual.vertex_colors = tv.random_color()  # pyright: ignore
+        return mesh
 
     def get_shot_from_angles(
         self,
@@ -134,32 +149,62 @@ class Loudspeaker:
         return val
 
     def test_intersection(
-        self, placement: npt.NDArray, norm: npt.NDArray, test_point: npt.NDArray
+        self,
+        test_mesh: trimesh.Trimesh,
+        placement: typing.Union[npt.NDArray, list[float]] = np.array([0, 0, 0]),
+        norm: typing.Union[None, npt.NDArray, list[float]] = None,
     ) -> bool:
-        """work in progress"""
-        box = trimesh.primitives.Box(np.array([self._x_dim, self._y_dim, self._z_dim]))
-        translation = trimesh.transformations.translation_matrix(
-            placement - np.array([0, self._y_offset, self._z_offset])
-        )
-        rotation = geometry.rotation_matrix(np.array([0, 0, 0]), norm)
-        return (
-            box.apply_transform(translation)
-            .apply_transform(rotation)
-            .contains(test_point)[0]
-        )
+        """
+        Returns True if this loudspeaker intersects another mesh.
 
-    def test_intersection_mesh(
-        self, placement: npt.NDArray, norm: npt.NDArray, mesh: trimesh.Trimesh
-    ) -> bool:
-        """work in progress"""
-        box = trimesh.primitives.Box(np.array([self._x_dim, self._y_dim, self._z_dim]))
-        translation = trimesh.transformations.translation_matrix(
-            placement - np.array([0, self._y_offset, self._z_offset])
+        Parameters
+        ------------
+        test_mesh:  mesh of object to check for intersection
+        placement:  3D position of the acoustic axis of this loudspeaker
+        norm:       vector describing the direction of this loudspeaker is pointed
+        """
+        # TODO:
+        if isinstance(placement, list):
+            placement = np.array(placement)
+        if isinstance(norm, list):
+            norm = np.array(placement)
+        mesh = self.mesh.copy()
+        if norm is not None:
+            angle = trimesh.transformations.angle_between_vectors(
+                np.array([1, 0, 0]), norm
+            )
+            axis = np.cross(np.array([1, 0, 0]), norm)
+            rotation_matrix = trimesh.transformations.rotation_matrix(angle, axis)
+            mesh.apply_transform(rotation_matrix)
+        # Position is measured from the lower, front, left corner
+        # TODO: is corner position adjustment really doing what we need?
+        corner_position = placement - np.array([0, self._y_offset, self._z_offset])
+        contained_points = test_mesh.contains(mesh.vertices + corner_position)
+
+        # NOTE: it would seem like we could take a shortcut here and return False
+        # if no points are contaiend. However, that will not correctly handle the
+        # case where all our vertices intersect the test mesh.
+
+        intersection = False
+        # Check whether each vertex intersects the mesh
+        pq = prox.ProximityQuery(test_mesh)
+        points_on_surface, distance_to_surface, _ = pq.on_surface(
+            mesh.vertices + corner_position
         )
-        rotation = geometry.rotation_matrix(np.array([0, 0, 0]), norm)
-        intersection = (
-            box.apply_transform(translation)
-            .apply_transform(rotation)
-            .intersection(mesh)
-        )
-        return intersection is None
+        for i, dist in enumerate(distance_to_surface):
+            if dist == 0:
+                intersection = True
+                print(
+                    f"Intersection at point [{points_on_surface[i][0]}, {points_on_surface[i][1]}, {points_on_surface[i][2]}]"
+                )
+        # If some of our vertices are inside and some are outside, we need to consider whether the edge between them intersects a face
+        if any(contained_points) and not all(contained_points):
+            print("Some edges straddle")
+            # Find edges between vertex pairs where one is inside and one is outside
+            for index, contained in enumerate(contained_points):
+                if not contained:
+                    for neighbor in self.mesh.vertex_neighbors[index]:
+                        if contained_points[neighbor]:
+                            intersection = True
+                            return True
+        return intersection
