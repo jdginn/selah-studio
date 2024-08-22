@@ -110,7 +110,7 @@ class Loudspeaker:
     def get_shots(
         self, source_pos: npt.NDArray, listening_pos: npt.NDArray, num_rays: int = 1000
     ) -> typing.List[Shot]:
-        """Returns num_rays of shots to be shot from this speaker"""
+        """Returns shots to be shot from this speaker"""
         # TODO: this should probably be an iterator rather than return a list
         shots: typing.List[Shot] = [
             Shot(
