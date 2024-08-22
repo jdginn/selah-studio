@@ -1,14 +1,23 @@
+import os
+import sys
+
+PROJECT_PATH = os.getcwd()
+SOURCE_PATH = os.path.join(PROJECT_PATH, "src")
+sys.path.append(SOURCE_PATH)
+
 from dataclasses import dataclass
 import typing
 import trimesh
 import matplotlib.pyplot as plt
+
+import selah
 
 from selah.material import MaterialManager, Material
 from selah.loudspeaker import Loudspeaker
 from selah.wall import Wall
 from selah.exceptions import SelahException
 from selah.source import SourceException, Reflection
-from selah.room import Room
+from selah.room import Room, CollisionException
 
 materials: typing.Dict[str, Material] = {
     "brick": Material(0.04),
@@ -80,19 +89,27 @@ if __name__ == "__main__":
     mm = MaterialManager(materials)
     mm.set_wall_materials(wall_materials)
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()], mm)
-    room.listening_triangle(
-        wall_name="Front",
-        height=params.height,
-        speaker_height=params.speaker_height,
-        dist_from_wall=params.dist_from_wall,
-        dist_from_center=params.dist_from_center,
-        deviation=params.deviation_from_equilateral,
-        source=Loudspeaker(
-            vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
-            horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
-        ),
-        rfz_radius=params.rfz_radius,
-    )
+    try:
+        room.listening_triangle(
+            wall_name="Front",
+            height=params.height,
+            speaker_height=params.speaker_height,
+            dist_from_wall=params.dist_from_wall,
+            dist_from_center=params.dist_from_center,
+            deviation=params.deviation_from_equilateral,
+            source=Loudspeaker(
+                x_dim=0.380,
+                y_dim=0.256,
+                z_dim=0.529,
+                y_offset=0.150,
+                z_offset=2.350,
+                vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
+                horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
+            ),
+            rfz_radius=params.rfz_radius,
+        )
+    except CollisionException as ex:
+        ex.scene.show()
     listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
         raise ListeningPositionError("Too close to front wall")
