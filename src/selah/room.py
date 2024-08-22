@@ -25,6 +25,17 @@ class ObscuresWindow(SelahException):
     """Indicates an attempt to create a wall that obscures the window"""
 
 
+class CollisionException(SelahException):
+    """Indicates the speaker would collide with a wall"""
+
+    def __init__(self, items: list[typing.Tuple[trimesh.Trimesh, npt.NDArray]]):
+        self.scene = trimesh.Scene()
+        for mesh, location in items:
+            self.scene.add_geometry(
+                mesh, transform=trimesh.transformations.translation_matrix(location)
+            )
+
+
 class ListeningPositionError(SelahException):
     """Indicates the listening position has been placed outside the valid area"""
 
@@ -172,6 +183,21 @@ class Room:
         l_source = self._lt.l_source()
         r_source = self._lt.r_source()
         listen_pos = self._lt.listening_pos()
+
+        if source.test_intersection(
+            self.mesh, l_source, geometry.dir_from_points(l_source, listen_pos)
+        ):
+            raise CollisionException(
+                [(self.mesh, np.array([0, 0, 0])), (source.mesh, l_source)]
+            )
+
+        if source.test_intersection(
+            self.mesh, r_source, geometry.dir_from_points(r_source, listen_pos)
+        ):
+            raise CollisionException(
+                [(self.mesh, np.array([0, 0, 0])), (source.mesh, r_source)]
+            )
+
         for w in self.walls:
             if w.name == "Window":
                 if geometry.test_intersection(
