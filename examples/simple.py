@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import selah
 
 from selah.material import MaterialManager, Material
-from selah.loudspeaker import LoudspeakerSpec
+from selah.loudspeaker import LoudspeakerSpec, Loudspeaker
 from selah.wall import Wall
 from selah.exceptions import SelahException
 from selah.source import SourceException, Reflection
@@ -123,7 +123,6 @@ if __name__ == "__main__":
     )
     try:
         l_arrivals = room.trace_arrivals(
-            room._lt.source,
             room._lt.l_source(),
             room._lt.listening_pos(),
             num_samples=params.num_samples,
@@ -133,7 +132,6 @@ if __name__ == "__main__":
             ignore_walls="Floor",
         )
         r_arrivals = room.trace_arrivals(
-            room._lt.source,
             room._lt.r_source(),
             room._lt.listening_pos(),
             num_samples=params.num_samples,

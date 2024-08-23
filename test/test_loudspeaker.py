@@ -4,10 +4,11 @@ import pytest
 
 import numpy as np
 import numpy.typing as npt
+from numpy.testing import assert_allclose
 import trimesh
 import trimesh.visual as tv
 
-from selah.loudspeaker import Loudspeaker
+from selah.loudspeaker import Loudspeaker, LoudspeakerSpec
 
 
 def box_from_origin(
@@ -21,40 +22,101 @@ def box_from_origin(
     return box
 
 
+def show_scene(items: list[trimesh.Trimesh]):
+    s = trimesh.Scene()
+    for item in items:
+        s.add_geometry(item)
+    s.show()
+
+
+def test_loudspeaker_position():
+    base = LoudspeakerSpec(x_dim=2, y_dim=2, z_dim=2, y_offset=1, z_offset=1)
+
+    assert np.allclose(
+        Loudspeaker(base).mesh.vertices,
+        np.array(
+            [
+                [0, -1, -1],
+                [0, -1, 1],
+                [0, 1, -1],
+                [0, 1, 1],
+                [2, -1, -1],
+                [2, -1, 1],
+                [2, 1, -1],
+                [2, 1, 1],
+            ]
+        ),
+    )
+
+    assert np.allclose(
+        Loudspeaker(base, position=[1, 1, 1]).mesh.vertices,
+        np.array(
+            [
+                [1, 0, 0],
+                [1, 0, 2],
+                [1, 2, 0],
+                [1, 2, 2],
+                [3, 0, 0],
+                [3, 0, 2],
+                [3, 2, 0],
+                [3, 2, 2],
+            ]
+        ),
+    )
+
+    assert np.allclose(
+        Loudspeaker(base, normal=[0, 1, 0]).mesh.vertices,
+        np.array(
+            [
+                [-1, 0, -1],
+                [-1, 0, 1],
+                [1, 0, -1],
+                [1, 0, 1],
+                [-1, -2, -1],
+                [-1, -2, 1],
+                [1, -2, -1],
+                [1, -2, 1],
+            ]
+        ),
+    )
+
+
 def test_test_intersection_mesh():
+    base = LoudspeakerSpec(2, 2, 2, y_offset=1, z_offset=1)
+
     # Speaker outside room
-    assert not Loudspeaker(
-        x_dim=2, y_dim=2, z_dim=2, y_offset=1, z_offset=1
-    ).test_intersection(box_from_origin([1, 1, 1]), placement=[4, 4, 4])
+    assert not Loudspeaker(base, position=[4, 4, 4]).test_intersection(
+        box_from_origin([1, 1, 1])
+    )
 
     # Speaker fully inside room
-    assert not Loudspeaker(
-        x_dim=2, y_dim=2, z_dim=2, y_offset=1, z_offset=1
-    ).test_intersection(box_from_origin([10, 10, 10]), placement=[3, 3, 3])
+    assert not Loudspeaker(base, position=[3, 3, 3]).test_intersection(
+        box_from_origin([10, 10, 10])
+    )
 
     # Speaker sharing one wall with room
-    assert Loudspeaker(
-        x_dim=2, y_dim=2, z_dim=2, y_offset=1, z_offset=1
-    ).test_intersection(box_from_origin([10, 10, 10]), placement=[0, 2, 2])
+    assert Loudspeaker(base, position=[0, 2, 2]).test_intersection(
+        box_from_origin([10, 10, 10])
+    )
 
     # Speaker same dimensions as room
     assert Loudspeaker(
-        x_dim=10, y_dim=10, z_dim=10, y_offset=5, z_offset=5
-    ).test_intersection(box_from_origin([10, 10, 10]), placement=[0, 0, 0])
+        LoudspeakerSpec(10, 10, 10, y_offset=5, z_offset=5)
+    ).test_intersection(box_from_origin([10, 10, 10]))
 
     # Speaker partially outside room
-    assert Loudspeaker(
-        x_dim=2, y_dim=2, z_dim=2, y_offset=1, z_offset=1
-    ).test_intersection(box_from_origin([10, 10, 10]), placement=[0, 9, 9])
+    assert Loudspeaker(base, position=[0, 9, 9]).test_intersection(
+        box_from_origin([10, 10, 10])
+    )
 
     # One edge of speaker rotated 45 degrees intersects wall
     # First, if we don't rotate, we don't hit the wall
+    # For this test, rotate around a corner rather than an axis in the middle of X face
     assert not Loudspeaker(
-        x_dim=2, y_dim=2, z_dim=2, y_offset=1, z_offset=1
-    ).test_intersection(box_from_origin([10, 10, 10]), placement=[3, 3, 8.8])
+        LoudspeakerSpec(2, 2, 2), position=[7.8, 3, 3]
+    ).test_intersection(box_from_origin([10, 10, 10]))
+
     # Now rotate 45deg and one edge intersects
     assert Loudspeaker(
-        x_dim=2, y_dim=2, z_dim=2, y_offset=1, z_offset=1
-    ).test_intersection(
-        box_from_origin([10, 10, 10]), placement=[3, 3, 8.8], norm=[1, 1, 0]
-    )
+        LoudspeakerSpec(2, 2, 2), position=[7.8, 3, 3], normal=[-1, 1, 0]
+    ).test_intersection(box_from_origin([10, 10, 10]))

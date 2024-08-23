@@ -23,13 +23,13 @@ class LoudspeakerSpec:
     # Takes arguments mapping degrees to gain in dB
     def __init__(
         self,
-        horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100},
-        vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30},
         x_dim: float = 0.520,
         y_dim: float = 0.256,
         z_dim: float = 0.380,
         y_offset: float = 0.128,
         z_offset: float = 0.128,
+        horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100},
+        vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30},
         x_margin: float = 0.05,
         y_margin: float = 0.05,
         z_margin: float = 0.05,
@@ -88,8 +88,8 @@ class Loudspeaker:
     def __init__(
         self,
         spec: LoudspeakerSpec,
-        position: typing.Union[npt.NDArray, list[float]],
-        normal: typing.Union[npt.NDArray, list[float]],
+        position: typing.Union[npt.NDArray, list[float]] = np.array([0, 0, 0]),
+        normal: typing.Union[npt.NDArray, list[float]] = np.array([-1, 0, 0]),
     ):
         """
         Loudspeaker represents a specific louspeaker at a specific location in space.
@@ -120,14 +120,18 @@ class Loudspeaker:
         """
         extents = np.array([self.spec._x_dim, self.spec._y_dim, self.spec._z_dim])
         mesh = trimesh.primitives.Box(np.array(extents))
-        mesh.apply_translation(extents / 2)
-
-        angle = trimesh.transformations.angle_between_vectors(
-            np.array([1, 0, 0]), self.normal
+        mesh.apply_translation(
+            extents / 2 - [0, self.spec._y_offset, self.spec._z_offset]
         )
-        axis = np.cross(np.array([1, 0, 0]), self.normal)
-        rotation_matrix = trimesh.transformations.rotation_matrix(angle, axis)
-        mesh.apply_transform(rotation_matrix)
+
+        if not np.allclose(self.normal, np.array([-1, 0, 0])):
+            angle = trimesh.transformations.angle_between_vectors(
+                np.array([-1, 0, 0]), self.normal
+            )
+            axis = np.cross(np.array([-1, 0, 0]), self.normal)
+            rotation_matrix = trimesh.transformations.rotation_matrix(angle, axis)
+            mesh.apply_transform(rotation_matrix)
+        mesh.apply_translation(self.position)
 
         mesh.visual.vertex_colors = tv.random_color()  # pyright: ignore
         return mesh
@@ -201,8 +205,6 @@ class Loudspeaker:
     def test_intersection(
         self,
         test_mesh: trimesh.Trimesh,
-        placement: typing.Union[npt.NDArray, list[float]] = np.array([0, 0, 0]),
-        norm: typing.Union[None, npt.NDArray, list[float]] = None,
     ) -> bool:
         """
         Returns True if this loudspeaker intersects another mesh.
@@ -214,19 +216,7 @@ class Loudspeaker:
         norm:       vector describing the direction of this loudspeaker is pointed
         """
         # TODO:
-        if isinstance(placement, list):
-            placement = np.array(placement)
-        if isinstance(norm, list):
-            norm = np.array(placement)
-        mesh = self.mesh.copy()
-        if norm is not None:
-            angle = trimesh.transformations.angle_between_vectors(
-                np.array([1, 0, 0]), norm
-            )
-            axis = np.cross(np.array([1, 0, 0]), norm)
-            rotation_matrix = trimesh.transformations.rotation_matrix(angle, axis)
-            mesh.apply_transform(rotation_matrix)
-        contained_points = test_mesh.contains(mesh.vertices)
+        contained_points = test_mesh.contains(self.mesh.vertices)
 
         # NOTE: it would seem like we could take a shortcut here and return False
         # if no points are contaiend. However, that will not correctly handle the
@@ -235,7 +225,7 @@ class Loudspeaker:
         intersection = False
         # Check whether each vertex intersects the mesh
         pq = prox.ProximityQuery(test_mesh)
-        points_on_surface, distance_to_surface, _ = pq.on_surface(mesh.vertices)
+        points_on_surface, distance_to_surface, _ = pq.on_surface(self.mesh.vertices)
         for i, dist in enumerate(distance_to_surface):
             if dist == 0:
                 intersection = True

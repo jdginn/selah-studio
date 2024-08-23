@@ -13,7 +13,7 @@ from .exceptions import SelahException
 from .material import MaterialManager
 from .loudspeaker import Loudspeaker, LoudspeakerSpec
 from .sound import SPEED_OF_SOUND, db, from_db
-from .source import Source, Shot, Reflection, ReflectionException, ShotException
+from .source import Source, Shot, Reflection, ReflectionException
 from .wall import Axis, Wall, build_wall_from_point
 
 
@@ -53,7 +53,7 @@ class ListeningTriangle:
         height: float,
         dist_from_wall: float,
         dist_from_center: float,
-        source: LoudspeakerSpec,
+        source_spec: LoudspeakerSpec,
         rfz_radius: float,
         **kwargs,
     ) -> None:
@@ -62,7 +62,7 @@ class ListeningTriangle:
         self.speaker_height = kwargs.get("speaker_height", height)
         self.dist_from_wall = dist_from_wall
         self.dist_from_center = dist_from_center
-        self.source = source
+        self.source_spec = source_spec
         self.rfz_radius = rfz_radius
         self._deviation = kwargs.get("deviation", 0)
 
@@ -77,12 +77,12 @@ class ListeningTriangle:
 
         # TODO: need to know which direction from the wall is interior vs exterior
 
-    def l_source(self) -> npt.NDArray:
+    def l_source(self) -> Loudspeaker:
         """Returns the position of the left stereo source"""
         p = self._wall.center_pos()
         match self._axis:
             case Axis.X:
-                return np.array(
+                speaker_pos = np.array(
                     [
                         self._wall_pos + self.dist_from_wall,
                         p[1] - self.dist_from_center,
@@ -94,13 +94,18 @@ class ListeningTriangle:
                 raise RuntimeError
             case Axis.Z:
                 raise RuntimeError
+        return Loudspeaker(
+            self.source_spec,
+            speaker_pos,
+            geometry.dir_from_points(speaker_pos, self.listening_pos()),
+        )
 
-    def r_source(self) -> npt.NDArray:
+    def r_source(self) -> Loudspeaker:
         """Returns the position of the right stereo source"""
         p = self._wall.center_pos()
         match self._axis:
             case Axis.X:
-                return np.array(
+                speaker_pos = np.array(
                     [
                         self._wall_pos + self.dist_from_wall,
                         p[1] + self.dist_from_center,
@@ -112,6 +117,11 @@ class ListeningTriangle:
                 raise RuntimeError
             case Axis.Z:
                 raise RuntimeError
+        return Loudspeaker(
+            self.source_spec,
+            speaker_pos,
+            geometry.dir_from_points(speaker_pos, self.listening_pos()),
+        )
 
     # Value from Rod Gervais' book Home Recording Studio: Build It Like The Pros
     LISTENER_DIST_INTO_TRIANGLE = 0.38
@@ -180,17 +190,8 @@ class Room:
             rfz_radius,
             **kwargs,
         )
-        listen_pos = self._lt.listening_pos()
-        l_source = Loudspeaker(
-            source,
-            self._lt.l_source(),
-            geometry.dir_from_points(self._lt.l_source(), listen_pos),
-        )
-        r_source = Loudspeaker(
-            source,
-            self._lt.r_source(),
-            geometry.dir_from_points(self._lt.r_source(), listen_pos),
-        )
+        l_source = self._lt.l_source()
+        r_source = self._lt.r_source()
 
         if l_source.test_intersection(self.mesh):
             raise CollisionException(
@@ -461,7 +462,6 @@ class Room:
     def trace_arrivals(
         self,
         source: Loudspeaker,
-        source_pos: npt.NDArray,
         listen_pos: npt.NDArray,
         **kwargs,
     ) -> typing.List[Source]:
@@ -486,7 +486,7 @@ class Room:
             arrival, intersects_rfz = self.trace_shot(
                 mesh,
                 shot,
-                source_pos,
+                source.position,
                 listen_pos,
                 self._lt.rfz_radius,
                 order,
@@ -505,10 +505,16 @@ class Room:
         Plots a 2-dimensional representation of the room as viewed from above.
         """
         plt.scatter(
-            self._lt.l_source()[0], self._lt.l_source()[1], marker="x", linewidth=8
+            self._lt.l_source().position[0],
+            self._lt.l_source().position[1],
+            marker="x",
+            linewidth=8,
         )
         plt.scatter(
-            self._lt.r_source()[0], self._lt.r_source()[1], marker="x", linewidth=8
+            self._lt.r_source().position[0],
+            self._lt.r_source().position[1],
+            marker="x",
+            linewidth=8,
         )
         circle = patches.Circle(
             (self._lt.listening_pos()[0], self._lt.listening_pos()[1]),
@@ -532,10 +538,16 @@ class Room:
         Plots a 2-dimensional representation of the room as viewed from the side.
         """
         plt.scatter(
-            self._lt.l_source()[0], self._lt.l_source()[2], marker="x", linewidth=8
+            self._lt.l_source().position[0],
+            self._lt.l_source().position[2],
+            marker="x",
+            linewidth=8,
         )
         plt.scatter(
-            self._lt.r_source()[0], self._lt.r_source()[2], marker="x", linewidth=8
+            self._lt.r_source().position[0],
+            self._lt.r_source().position[2],
+            marker="x",
+            linewidth=8,
         )
         circle = patches.Circle(
             (self._lt.listening_pos()[0], self._lt.listening_pos()[2]),

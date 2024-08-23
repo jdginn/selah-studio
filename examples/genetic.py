@@ -130,7 +130,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         genetic_params.ceiling_diffuser_position,
     )
     l_arrivals = room.trace_arrivals(
-        room._lt.source,
+        room._lt.source_spec,
         room._lt.l_source(),
         room._lt.listening_pos(),
         num_samples=fixed_params.num_samples,
@@ -139,7 +139,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         order=fixed_params.order,
     )
     r_arrivals = room.trace_arrivals(
-        room._lt.source,
+        room._lt.source_spec,
         room._lt.r_source(),
         room._lt.listening_pos(),
         num_samples=fixed_params.num_samples,
