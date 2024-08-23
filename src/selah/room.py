@@ -11,7 +11,7 @@ from trimesh.ray import ray_triangle
 from . import geometry
 from .exceptions import SelahException
 from .material import MaterialManager
-from .loudspeaker import Loudspeaker
+from .loudspeaker import Loudspeaker, LoudspeakerSpec
 from .sound import SPEED_OF_SOUND, db, from_db
 from .source import Source, Shot, Reflection, ReflectionException, ShotException
 from .wall import Axis, Wall, build_wall_from_point
@@ -53,7 +53,7 @@ class ListeningTriangle:
         height: float,
         dist_from_wall: float,
         dist_from_center: float,
-        source: Loudspeaker,
+        source: LoudspeakerSpec,
         rfz_radius: float,
         **kwargs,
     ) -> None:
@@ -162,7 +162,7 @@ class Room:
         height: float,
         dist_from_wall: float,
         dist_from_center: float,
-        source: Loudspeaker,
+        source: LoudspeakerSpec,
         rfz_radius: float,
         **kwargs,
     ) -> None:
@@ -180,42 +180,45 @@ class Room:
             rfz_radius,
             **kwargs,
         )
-        l_source = self._lt.l_source()
-        r_source = self._lt.r_source()
         listen_pos = self._lt.listening_pos()
+        l_source = Loudspeaker(
+            source,
+            self._lt.l_source(),
+            geometry.dir_from_points(self._lt.l_source(), listen_pos),
+        )
+        r_source = Loudspeaker(
+            source,
+            self._lt.r_source(),
+            geometry.dir_from_points(self._lt.r_source(), listen_pos),
+        )
 
-        if source.test_intersection(
-            self.mesh, l_source, geometry.dir_from_points(l_source, listen_pos)
-        ):
+        if l_source.test_intersection(self.mesh):
             raise CollisionException(
-                [(self.mesh, np.array([0, 0, 0])), (source.mesh, l_source)]
+                [(self.mesh, np.array([0, 0, 0])), (l_source.mesh, l_source.position)]
             )
-
-        if source.test_intersection(
-            self.mesh, r_source, geometry.dir_from_points(r_source, listen_pos)
-        ):
+        if r_source.test_intersection(self.mesh):
             raise CollisionException(
-                [(self.mesh, np.array([0, 0, 0])), (source.mesh, r_source)]
+                [(self.mesh, np.array([0, 0, 0])), (r_source.mesh, r_source.position)]
             )
 
         for w in self.walls:
             if w.name == "Window":
                 if geometry.test_intersection(
-                    w.mesh, l_source, geometry.dir_from_points(l_source, listen_pos)
+                    w.mesh, l_source.position, l_source.normal
                 ):
                     raise ObscuresWindow("Left wall obscures window")
         for w in self.walls:
             if w.name == "Window":
                 if geometry.test_intersection(
-                    w.mesh, r_source, geometry.dir_from_points(r_source, listen_pos)
+                    w.mesh, r_source.position, r_source.normal
                 ):
                     raise ObscuresWindow("Right wall obscures window")
         self.walls.append(
             build_wall_from_point(
                 "left speaker wall",
                 self.mesh,
-                l_source,
-                geometry.dir_from_points(l_source, listen_pos),
+                l_source.position,
+                l_source.normal,
                 self._mm.get_wall("left speaker wall"),
             )
         )
@@ -223,8 +226,8 @@ class Room:
             build_wall_from_point(
                 "right speaker wall",
                 self.mesh,
-                r_source,
-                geometry.dir_from_points(r_source, listen_pos),
+                r_source.position,
+                r_source.normal,
                 self._mm.get_wall("right speaker wall"),
             )
         )
@@ -475,7 +478,7 @@ class Room:
         self._max_time = max_time
         self._min_gain = min_gain
 
-        shots = source.get_shots(source_pos, listen_pos, num_samples)
+        shots = source.get_shots(listen_pos, num_samples)
         mesh = self.mesh
 
         arrivals: typing.List[Source] = []

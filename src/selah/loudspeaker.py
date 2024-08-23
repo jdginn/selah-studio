@@ -19,9 +19,7 @@ kh310_horiz_disp: dict[float, float] = {0: 0, 30: 0, 50: -3, 70: -6, 80: -9, 90:
 kh310_vert_disp: dict[float, float] = {0: 0, 30: -3, 60: -6, 90: -9, 100: -30}
 
 
-class Loudspeaker:
-    """Dispersions in degrees"""
-
+class LoudspeakerSpec:
     # Takes arguments mapping degrees to gain in dB
     def __init__(
         self,
@@ -37,10 +35,28 @@ class Loudspeaker:
         z_margin: float = 0.05,
     ):
         """
-        Louspeaker represents a directional louspeaker.
+        LouspeakerSpec represents a certain kind of directional louspeaker.
 
-        horiz_disp and vert_disp map dispersions angles in degrees to gain at that
-        angle relative to the main acoustic axis in decibels.
+        Speaker dimensions assume the drivers are on the plane of X=0.
+
+        Parameters
+        ----------
+        horiz_disp : dict[float, float]
+            maps dispersion angle in degrees to gain in dB relative to acoustic axis
+            (implicitly assuemes 0deg : 0dB)
+        vert_disp : dict[float, float]
+            maps dispersion angle in degrees to gain in dB relative to acoustic axis
+            (implicitly assuemes 0deg : 0dB)
+        x_dim : float
+            dimension of speaker on x axis
+        y_dim : float
+            dimension of speaker on y axis
+        z_dim : float
+            dimension of speaker on z axis
+        y_offset: float
+            offset of the acoustic axis from [0, 0, 0] (i.e. the front bottom left corner)
+        z_offset: float
+            offset of the acoustic axis from [0, 0, 0] (i.e. the front bottom left corner)
         """
         self._h_x = np.array(list(horiz_disp.keys()), np.float32)
         self._h_y = np.array(list(horiz_disp.values()), np.float32)
@@ -53,6 +69,48 @@ class Loudspeaker:
         self._y_offset = y_offset
         self._z_offset = z_offset
 
+    def gain(self, vert_angle: float, horiz_angle: float) -> float:
+        """
+        Returns the gain of the source at the given angle in decibels.
+
+        Angles in degrees.
+        """
+        val = np.interp(abs(vert_angle), self._v_x, self._v_y) + np.interp(
+            abs(horiz_angle), self._h_x, self._h_y
+        )
+        if not isinstance(val, float):
+            raise RuntimeError
+        return val
+
+
+class Loudspeaker:
+    # Takes arguments mapping degrees to gain in dB
+    def __init__(
+        self,
+        spec: LoudspeakerSpec,
+        position: typing.Union[npt.NDArray, list[float]],
+        normal: typing.Union[npt.NDArray, list[float]],
+    ):
+        """
+        Loudspeaker represents a specific louspeaker at a specific location in space.
+
+        Parameters
+        ----------
+        spec : LoudspeakerSpec
+           Defines the specifics of the kind of speaker
+        position : (3,1) float
+            Location of the acoustic axis in 3-dimensional space
+        normal: (3,1) float
+            Normal vector from acoustic axis
+        """
+        self.spec = spec
+        if isinstance(position, list):
+            position = np.array(position)
+        self.position = position
+        if isinstance(normal, list):
+            normal = np.array(normal)
+        self.normal = normal
+
     @property
     def mesh(self) -> trimesh.Trimesh:
         """
@@ -60,15 +118,22 @@ class Loudspeaker:
 
         Mesh always places the front, bottom, left corner at the origin.
         """
-        extents = np.array([self._x_dim, self._y_dim, self._z_dim])
+        extents = np.array([self.spec._x_dim, self.spec._y_dim, self.spec._z_dim])
         mesh = trimesh.primitives.Box(np.array(extents))
         mesh.apply_translation(extents / 2)
+
+        angle = trimesh.transformations.angle_between_vectors(
+            np.array([1, 0, 0]), self.normal
+        )
+        axis = np.cross(np.array([1, 0, 0]), self.normal)
+        rotation_matrix = trimesh.transformations.rotation_matrix(angle, axis)
+        mesh.apply_transform(rotation_matrix)
+
         mesh.visual.vertex_colors = tv.random_color()  # pyright: ignore
         return mesh
 
     def get_shot_from_angles(
         self,
-        source_pos: npt.NDArray,
         listening_pos: npt.NDArray,
         pitch: float = 0,
         yaw: float = 0,
@@ -79,7 +144,7 @@ class Loudspeaker:
         Angles in degrees.
         """
         shot_spec = ShotSpecification(pitch, yaw)
-        normal = geometry.dir_from_points(source_pos, listening_pos)
+        normal = geometry.dir_from_points(self.position, listening_pos)
         pitch_rads = pitch / 180 * math.pi
         pitch_matrix = np.array(
             [
@@ -99,8 +164,8 @@ class Loudspeaker:
         new_dir = yaw_matrix.dot(pitch_matrix).dot(normal)
         new_dir = new_dir / np.linalg.norm(new_dir)
         return Shot(
-            source_pos,
-            sound.from_db(self.gain(pitch, yaw)),
+            self.position,
+            sound.from_db(self.spec.gain(pitch, yaw)),
             0,
             new_dir,
             self,
@@ -108,16 +173,16 @@ class Loudspeaker:
         )
 
     def get_shots(
-        self, source_pos: npt.NDArray, listening_pos: npt.NDArray, num_rays: int = 1000
+        self, listening_pos: npt.NDArray, num_rays: int = 1000
     ) -> typing.List[Shot]:
         """Returns shots to be shot from this speaker"""
         # TODO: this should probably be an iterator rather than return a list
         shots: typing.List[Shot] = [
             Shot(
-                source_pos,
+                self.position,
                 1.0,
                 0,
-                geometry.dir_from_points(source_pos, listening_pos),
+                geometry.dir_from_points(self.position, listening_pos),
                 self,
             )
         ]
@@ -130,23 +195,8 @@ class Loudspeaker:
             pitch = -SIMULATION_DISPERSION_RANGE / 2 + v_step_size * v
             for h in range(h_steps):
                 yaw = -SIMULATION_DISPERSION_RANGE / 2 + h_step_size * h
-                shots.append(
-                    self.get_shot_from_angles(source_pos, listening_pos, pitch, yaw)
-                )
+                shots.append(self.get_shot_from_angles(listening_pos, pitch, yaw))
         return shots
-
-    def gain(self, vert_angle: float, horiz_angle: float) -> float:
-        """
-        Returns the gain of the source at the given angle in decibels.
-
-        Angles in degrees.
-        """
-        val = np.interp(abs(vert_angle), self._v_x, self._v_y) + np.interp(
-            abs(horiz_angle), self._h_x, self._h_y
-        )
-        if not isinstance(val, float):
-            raise RuntimeError
-        return val
 
     def test_intersection(
         self,
@@ -176,10 +226,7 @@ class Loudspeaker:
             axis = np.cross(np.array([1, 0, 0]), norm)
             rotation_matrix = trimesh.transformations.rotation_matrix(angle, axis)
             mesh.apply_transform(rotation_matrix)
-        # Position is measured from the lower, front, left corner
-        # TODO: is corner position adjustment really doing what we need?
-        corner_position = placement - np.array([0, self._y_offset, self._z_offset])
-        contained_points = test_mesh.contains(mesh.vertices + corner_position)
+        contained_points = test_mesh.contains(mesh.vertices)
 
         # NOTE: it would seem like we could take a shortcut here and return False
         # if no points are contaiend. However, that will not correctly handle the
@@ -188,9 +235,7 @@ class Loudspeaker:
         intersection = False
         # Check whether each vertex intersects the mesh
         pq = prox.ProximityQuery(test_mesh)
-        points_on_surface, distance_to_surface, _ = pq.on_surface(
-            mesh.vertices + corner_position
-        )
+        points_on_surface, distance_to_surface, _ = pq.on_surface(mesh.vertices)
         for i, dist in enumerate(distance_to_surface):
             if dist == 0:
                 intersection = True

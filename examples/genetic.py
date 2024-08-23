@@ -1,3 +1,10 @@
+import os
+import sys
+
+PROJECT_PATH = os.getcwd()
+SOURCE_PATH = os.path.join(PROJECT_PATH, "src")
+sys.path.append(SOURCE_PATH)
+
 from dataclasses import dataclass
 import typing
 import pprint
@@ -11,7 +18,7 @@ from selah.material import MaterialManager, Material
 from selah.wall import Wall
 from selah.source import Source
 from selah.exceptions import SelahException
-from selah.loudspeaker import Loudspeaker
+from selah.loudspeaker import LoudspeakerSpec
 from selah.sound import SPEED_OF_SOUND
 
 materials: typing.Dict[str, Material] = {
@@ -105,7 +112,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         dist_from_wall=genetic_params.dist_from_wall,
         dist_from_center=genetic_params.dist_from_center,
         deviation=genetic_params.deviation_from_equilateral,
-        source=Loudspeaker(
+        source=LoudspeakerSpec(
             vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
             horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
         ),

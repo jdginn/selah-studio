@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import selah
 
 from selah.material import MaterialManager, Material
-from selah.loudspeaker import Loudspeaker
+from selah.loudspeaker import LoudspeakerSpec
 from selah.wall import Wall
 from selah.exceptions import SelahException
 from selah.source import SourceException, Reflection
@@ -97,7 +97,7 @@ if __name__ == "__main__":
             dist_from_wall=params.dist_from_wall,
             dist_from_center=params.dist_from_center,
             deviation=params.deviation_from_equilateral,
-            source=Loudspeaker(
+            source=LoudspeakerSpec(
                 x_dim=0.380,
                 y_dim=0.256,
                 z_dim=0.529,
