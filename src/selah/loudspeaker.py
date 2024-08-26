@@ -84,7 +84,9 @@ class LoudspeakerSpec:
 
 
 class Loudspeaker:
-    # Takes arguments mapping degrees to gain in dB
+    # Reference normal against which all new normals are referenced
+    ref_vec = np.array([-1, 0, 0])
+
     def __init__(
         self,
         spec: LoudspeakerSpec,
@@ -116,38 +118,34 @@ class Loudspeaker:
         """
         Returns a mesh representing this loudspeaker.
 
-        Mesh always places the front, bottom, left corner at the origin.
+        Mesh is already rotated and translated to the correct position.
         """
         if not hasattr(self, "_mesh"):
             extents = np.array([self.spec._x_dim, self.spec._y_dim, self.spec._z_dim])
             mesh = trimesh.primitives.Box(np.array(extents))
-
-            if not np.allclose(self.normal, np.array([-1, 0, 0])):
-                # Take new norm and normalize so x=1
-                # Apply two rotation matrices by the values of y and z after normalizing
-                norm = self.normal / self.normal[0]
-                rotation_matrix = trimesh.transformations.rotation_matrix(
-                    trimesh.transformations.angle_between_vectors(
-                        np.array([-1, 0, 0]), np.array([-1, norm[1], 0])
-                    ),
-                    np.array([0, 1, 0]),
-                )
-                mesh.apply_transform(rotation_matrix)
-                rotation_matrix = trimesh.transformations.rotation_matrix(
-                    trimesh.transformations.angle_between_vectors(
-                        np.array([-1, 0, 0]), np.array([-1, 0, norm[2]])
-                    ),
-                    np.array([0, 0, 1]),
-                )
-                mesh.apply_transform(rotation_matrix)
 
             mesh.apply_translation(
                 # normalize so bottom left corner is at [0, 0, 0]
                 extents / 2
                 # normalize so acoustic center is at [0, 0, 0]
                 - [0, self.spec._y_offset, self.spec._z_offset]
+            )
+            rv = -self.ref_vec
+            angle = trimesh.transformations.angle_between_vectors(rv, self.normal, True)
+            axis = np.cross(rv, self.normal)
+            mesh.apply_transform(
+                trimesh.transformations.rotation_matrix(
+                    angle, axis, np.array([0, 0, 0])
+                )
+            )
+
+            mesh.apply_translation(
+                # # normalize so bottom left corner is at [0, 0, 0]
+                # extents / 2
+                # # normalize so acoustic center is at [0, 0, 0]
+                # - [0, self.spec._y_offset, self.spec._z_offset]
                 # move acoustic center into position
-                + self.position
+                +self.position
             )
 
             mesh.visual.vertex_colors = tv.random_color()  # pyright: ignore

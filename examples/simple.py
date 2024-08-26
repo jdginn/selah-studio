@@ -60,8 +60,8 @@ class ListeningPositionError(SelahException):
 class parameters:
     filename: str = "examples/resources/studio.3mf"
     height: float = 1.4
-    speaker_height: float = 2.4
-    dist_from_wall: float = 0.3
+    speaker_height: float = 2.0
+    dist_from_wall: float = 0.5
     dist_from_center: float = 0.95
     deviation_from_equilateral: float = 0.5
     max_listen_pos: float = 2.4
@@ -102,13 +102,14 @@ if __name__ == "__main__":
                 y_dim=0.256,
                 z_dim=0.529,
                 y_offset=0.150,
-                z_offset=2.350,
+                z_offset=0.235,
                 vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
                 horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
             ),
             rfz_radius=params.rfz_radius,
         )
     except CollisionException as ex:
+        print(f"Exception: {type(ex)}")
         ex.scene.show()
     listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
@@ -145,7 +146,7 @@ if __name__ == "__main__":
         fig = plt.figure()
         room.plot_arrivals_interactive(fig, arrivals, False)
         plt.show(block=True)
-        room.mesh.show()
+        room.show()
     except SourceException as ex:
         print(ex.message)
         arrivals = [ex.source]
@@ -153,4 +154,4 @@ if __name__ == "__main__":
         fig = plt.figure()
         room.plot_arrivals_interactive(fig, arrivals, False)
         plt.show(block=True)
-        room.mesh.show()
+        room.show()
