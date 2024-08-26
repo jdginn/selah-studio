@@ -118,23 +118,25 @@ class Loudspeaker:
 
         Mesh always places the front, bottom, left corner at the origin.
         """
-        extents = np.array([self.spec._x_dim, self.spec._y_dim, self.spec._z_dim])
-        mesh = trimesh.primitives.Box(np.array(extents))
-        mesh.apply_translation(
-            extents / 2 - [0, self.spec._y_offset, self.spec._z_offset]
-        )
-
-        if not np.allclose(self.normal, np.array([-1, 0, 0])):
-            angle = trimesh.transformations.angle_between_vectors(
-                np.array([-1, 0, 0]), self.normal
+        if not hasattr(self, "_mesh"):
+            extents = np.array([self.spec._x_dim, self.spec._y_dim, self.spec._z_dim])
+            mesh = trimesh.primitives.Box(np.array(extents))
+            mesh.apply_translation(
+                extents / 2 - [0, self.spec._y_offset, self.spec._z_offset]
             )
-            axis = np.cross(np.array([-1, 0, 0]), self.normal)
-            rotation_matrix = trimesh.transformations.rotation_matrix(angle, axis)
-            mesh.apply_transform(rotation_matrix)
-        mesh.apply_translation(self.position)
 
-        mesh.visual.vertex_colors = tv.random_color()  # pyright: ignore
-        return mesh
+            if not np.allclose(self.normal, np.array([-1, 0, 0])):
+                angle = trimesh.transformations.angle_between_vectors(
+                    np.array([-1, 0, 0]), self.normal
+                )
+                axis = np.cross(np.array([-1, 0, 0]), self.normal)
+                rotation_matrix = trimesh.transformations.rotation_matrix(angle, axis)
+                mesh.apply_transform(rotation_matrix)
+            mesh.apply_translation(self.position)
+
+            mesh.visual.vertex_colors = tv.random_color()  # pyright: ignore
+            self._mesh = mesh
+        return self._mesh
 
     def get_shot_from_angles(
         self,
