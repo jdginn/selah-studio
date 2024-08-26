@@ -7,6 +7,9 @@ import numpy as np
 import numpy.typing as npt
 import trimesh
 from trimesh.ray import ray_triangle
+import trimesh.visual as tv
+import trimesh.path.entities as entities
+import trimesh.path as path
 
 from . import geometry
 from .exceptions import SelahException
@@ -196,18 +199,18 @@ class Room:
         if r_source.test_intersection(self.mesh):
             raise CollisionException([self.mesh, r_source.mesh])
 
-        for w in self.walls:
-            if w.name == "Window":
-                if geometry.test_intersection(
-                    w.mesh, l_source.position, l_source.normal
-                ):
-                    raise ObscuresWindow("Left wall obscures window")
-        for w in self.walls:
-            if w.name == "Window":
-                if geometry.test_intersection(
-                    w.mesh, r_source.position, r_source.normal
-                ):
-                    raise ObscuresWindow("Right wall obscures window")
+        # for w in self.walls:
+        #     if w.name == "Window":
+        #         if geometry.test_intersection(
+        #             w.mesh, l_source.position, l_source.normal
+        #         ):
+        #             raise ObscuresWindow("Left wall obscures window")
+        # for w in self.walls:
+        #     if w.name == "Window":
+        #         if geometry.test_intersection(
+        #             w.mesh, r_source.position, r_source.normal
+        #         ):
+        #             raise ObscuresWindow("Right wall obscures window")
         self.walls.append(
             build_wall_from_point(
                 "left speaker wall",
@@ -671,11 +674,53 @@ class Room:
         self.plot_arrivals(fig, arrivals, manually_advance)
 
     def show(self):
-        s = trimesh.Scene()
+        scene = trimesh.Scene()
+        scene.add_geometry(self.mesh)
+        scene.add_geometry(self._lt.l_source().mesh)
+        scene.add_geometry(self._lt.r_source().mesh)
+        lpos = trimesh.primitives.Sphere(radius=0.1, center=self._lt.listening_pos())
+        lpos.visual.vertex_colors = tv.random_color()  # pyright: ignore
+        scene.add_geometry(
+            trimesh.load_path(
+                [self._lt.l_source().position, self._lt.listening_pos()],
+            )
+        )
+        scene.add_geometry(
+            trimesh.load_path(
+                [self._lt.r_source().position, self._lt.listening_pos()],
+            )
+        )
+        # scene.add_geometry(
+        #     trimesh.load_path(
+        #         [
+        #             self._lt.r_source().position,
+        #             self._lt.r_source().position + self._lt.r_source().normal * 10,
+        #         ],
+        #     )
+        # )
+        scene.add_geometry(
+            trimesh.load_path(
+                [
+                    self._lt.r_source().position,
+                    self._lt.r_source().position
+                    + (
+                        self._lt.r_source().mesh.vertices[4]
+                        - self._lt.r_source().mesh.vertices[0]
+                    )
+                    * 10,
+                ],
+            )
+        )
+        scene.add_geometry(
+            trimesh.load_path(
+                [
+                    self._lt.l_source().position,
+                    self._lt.l_source().position + self._lt.l_source().normal * 10,
+                ],
+            )
+        )
+        scene.add_geometry(lpos)
         import pdb
 
         pdb.set_trace()
-        s.add_geometry(self.mesh)
-        s.add_geometry(self._lt.l_source().mesh)
-        s.add_geometry(self._lt.r_source().mesh)
-        s.show()
+        scene.show()

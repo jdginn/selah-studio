@@ -126,7 +126,8 @@ class Loudspeaker:
 
             mesh.apply_translation(
                 # normalize so bottom left corner is at [0, 0, 0]
-                extents / 2
+                np.array([-extents[0], extents[1], extents[2]]) / 2
+                # extents / 2
                 # normalize so acoustic center is at [0, 0, 0]
                 - [0, self.spec._y_offset, self.spec._z_offset]
             )
@@ -231,9 +232,6 @@ class Loudspeaker:
         placement:  3D position of the acoustic axis of this loudspeaker
         norm:       vector describing the direction of this loudspeaker is pointed
         """
-        # TODO:
-        contained_points = test_mesh.contains(self.mesh.vertices)
-
         # NOTE: it would seem like we could take a shortcut here and return False
         # if no points are contaiend. However, that will not correctly handle the
         # case where all our vertices intersect the test mesh.
@@ -248,14 +246,30 @@ class Loudspeaker:
                 print(
                     f"Intersection at point [{points_on_surface[i][0]}, {points_on_surface[i][1]}, {points_on_surface[i][2]}]"
                 )
+        return False
         # If some of our vertices are inside and some are outside, we need to consider whether the edge between them intersects a face
+        contained_points = test_mesh.contains(self.mesh.vertices)
         if any(contained_points) and not all(contained_points):
+            scene = trimesh.Scene()
+            scene.add_geometry(test_mesh)
+            scene.add_geometry(self.mesh)
             print("Some edges straddle")
             # Find edges between vertex pairs where one is inside and one is outside
             for index, contained in enumerate(contained_points):
                 if not contained:
                     for neighbor in self.mesh.vertex_neighbors[index]:
                         if contained_points[neighbor]:
+                            scene.add_geometry(
+                                trimesh.PointCloud(
+                                    [
+                                        self.mesh.vertices[index],
+                                    ]
+                                )
+                            )
+                            print(
+                                f"Offending points: [{self.mesh.vertices[index][0]}, {self.mesh.vertices[index][1]}, {self.mesh.vertices[index][2]}], [{self.mesh.vertices[neighbor][0]}, {self.mesh.vertices[neighbor][1]}, {self.mesh.vertices[neighbor][2]}]"
+                            )
                             intersection = True
                             return True
+            # scene.show()
         return intersection

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import typing
 import trimesh
 import matplotlib.pyplot as plt
+import trimesh.exchange.export as export
 
 import selah
 
@@ -60,9 +61,9 @@ class ListeningPositionError(SelahException):
 class parameters:
     filename: str = "examples/resources/studio.3mf"
     height: float = 1.4
-    speaker_height: float = 2.0
-    dist_from_wall: float = 0.5
-    dist_from_center: float = 0.95
+    speaker_height: float = 2.1
+    dist_from_wall: float = 0.3
+    dist_from_center: float = 0.9
     deviation_from_equilateral: float = 0.5
     max_listen_pos: float = 2.4
     min_listen_pos: float = 1.3
@@ -110,7 +111,8 @@ if __name__ == "__main__":
         )
     except CollisionException as ex:
         print(f"Exception: {type(ex)}")
-        ex.scene.show()
+        # ex.scene.show()
+        room.show()
     listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
         raise ListeningPositionError("Too close to front wall")
@@ -142,10 +144,10 @@ if __name__ == "__main__":
             ignore_walls="Floor",
         )
         arrivals = l_arrivals + r_arrivals
-        plt.ion()
-        fig = plt.figure()
-        room.plot_arrivals_interactive(fig, arrivals, False)
-        plt.show(block=True)
+        # plt.ion()
+        # fig = plt.figure()
+        # room.plot_arrivals_interactive(fig, arrivals, False)
+        # plt.show(block=True)
         room.show()
     except SourceException as ex:
         print(ex.message)
