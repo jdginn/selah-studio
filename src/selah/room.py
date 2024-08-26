@@ -28,12 +28,10 @@ class ObscuresWindow(SelahException):
 class CollisionException(SelahException):
     """Indicates the speaker would collide with a wall"""
 
-    def __init__(self, items: list[typing.Tuple[trimesh.Trimesh, npt.NDArray]]):
+    def __init__(self, items: list[trimesh.Trimesh]):
         self.scene = trimesh.Scene()
-        for mesh, location in items:
-            self.scene.add_geometry(
-                mesh, transform=trimesh.transformations.translation_matrix(location)
-            )
+        for mesh in items:
+            self.scene.add_geometry(mesh)
 
 
 class ListeningPositionError(SelahException):
@@ -194,13 +192,9 @@ class Room:
         r_source = self._lt.r_source()
 
         if l_source.test_intersection(self.mesh):
-            raise CollisionException(
-                [(self.mesh, np.array([0, 0, 0])), (l_source.mesh, l_source.position)]
-            )
+            raise CollisionException([self.mesh, l_source.mesh])
         if r_source.test_intersection(self.mesh):
-            raise CollisionException(
-                [(self.mesh, np.array([0, 0, 0])), (r_source.mesh, r_source.position)]
-            )
+            raise CollisionException([self.mesh, r_source.mesh])
 
         for w in self.walls:
             if w.name == "Window":
@@ -675,3 +669,13 @@ class Room:
         fig.canvas.mpl_connect("pick_event", on_pick)
         fig.canvas.mpl_connect("key_press_event", on_press)
         self.plot_arrivals(fig, arrivals, manually_advance)
+
+    def show(self):
+        s = trimesh.Scene()
+        import pdb
+
+        pdb.set_trace()
+        s.add_geometry(self.mesh)
+        s.add_geometry(self._lt.l_source().mesh)
+        s.add_geometry(self._lt.r_source().mesh)
+        s.show()
