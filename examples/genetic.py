@@ -130,22 +130,22 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         genetic_params.ceiling_diffuser_position,
     )
     l_arrivals = room.trace_arrivals(
-        room._lt.source_spec,
         room._lt.l_source(),
         room._lt.listening_pos(),
         num_samples=fixed_params.num_samples,
         max_time=fixed_params.max_time,
         min_gain=fixed_params.min_gain,
         order=fixed_params.order,
+        ignore_walls="Floor",
     )
     r_arrivals = room.trace_arrivals(
-        room._lt.source_spec,
         room._lt.r_source(),
         room._lt.listening_pos(),
         num_samples=fixed_params.num_samples,
         max_time=fixed_params.max_time,
         min_gain=fixed_params.min_gain,
         order=fixed_params.order,
+        ignore_walls="Floor",
     )
     arrivals = l_arrivals + r_arrivals
     return room, arrivals
@@ -180,7 +180,7 @@ if __name__ == "__main__":
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
     )
     ga_instance = pygad.GA(
-        num_generations=8,
+        num_generations=1,
         num_parents_mating=4,
         fitness_func=fitness_func,
         sol_per_pop=32,
