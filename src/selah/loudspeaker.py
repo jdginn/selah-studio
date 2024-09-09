@@ -248,7 +248,7 @@ class Loudspeaker:
             scene = trimesh.Scene()
             scene.add_geometry(test_mesh)
             scene.add_geometry(self.mesh)
-            print("Some edges straddle")
+            # intersection = True
             # Find edges between vertex pairs where one is inside and one is outside
             for index, contained in enumerate(contained_points):
                 if not contained:

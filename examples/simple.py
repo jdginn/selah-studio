@@ -111,7 +111,6 @@ if __name__ == "__main__":
         )
     except CollisionException as ex:
         print(f"Exception: {type(ex)}")
-        # ex.scene.show()
         room.show()
     listen_pos = room._lt.listening_pos()
     if listen_pos[0] <= params.min_listen_pos:
@@ -144,10 +143,10 @@ if __name__ == "__main__":
             ignore_walls="Floor",
         )
         arrivals = l_arrivals + r_arrivals
-        # plt.ion()
-        # fig = plt.figure()
-        # room.plot_arrivals_interactive(fig, arrivals, False)
-        # plt.show(block=True)
+        plt.ion()
+        fig = plt.figure()
+        room.plot_arrivals_interactive(fig, arrivals, False)
+        plt.show(block=True)
         room.show()
     except SourceException as ex:
         print(ex.message)
