@@ -720,7 +720,7 @@ class Room:
             )
         )
         scene.add_geometry(lpos)
-        import pdb
-
-        pdb.set_trace()
+        # import pdb
+        #
+        # pdb.set_trace()
         scene.show()

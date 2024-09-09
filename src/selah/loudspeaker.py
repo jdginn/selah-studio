@@ -131,9 +131,16 @@ class Loudspeaker:
                 # normalize so acoustic center is at [0, 0, 0]
                 - [0, self.spec._y_offset, self.spec._z_offset]
             )
-            rv = -self.ref_vec
-            angle = trimesh.transformations.angle_between_vectors(rv, self.normal, True)
-            axis = np.cross(rv, self.normal)
+            ref_vec = -self.ref_vec
+            angle = trimesh.transformations.angle_between_vectors(
+                ref_vec, self.normal, True
+            )
+            axis = np.cross(ref_vec, self.normal)
+            if np.allclose(axis, [0, 0, 0]):
+                axis = ref_vec
+            # import pdb
+            #
+            # pdb.set_trace()
             mesh.apply_transform(
                 trimesh.transformations.rotation_matrix(
                     angle, axis, np.array([0, 0, 0])
