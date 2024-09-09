@@ -127,7 +127,6 @@ class Loudspeaker:
             mesh.apply_translation(
                 # normalize so bottom left corner is at [0, 0, 0]
                 np.array([-extents[0], extents[1], extents[2]]) / 2
-                # extents / 2
                 # normalize so acoustic center is at [0, 0, 0]
                 - [0, self.spec._y_offset, self.spec._z_offset]
             )
@@ -137,24 +136,14 @@ class Loudspeaker:
             )
             axis = np.cross(ref_vec, self.normal)
             if np.allclose(axis, [0, 0, 0]):
-                axis = ref_vec
-            # import pdb
-            #
-            # pdb.set_trace()
+                axis = np.array([0, 0, 1])
             mesh.apply_transform(
                 trimesh.transformations.rotation_matrix(
                     angle, axis, np.array([0, 0, 0])
                 )
             )
 
-            mesh.apply_translation(
-                # # normalize so bottom left corner is at [0, 0, 0]
-                # extents / 2
-                # # normalize so acoustic center is at [0, 0, 0]
-                # - [0, self.spec._y_offset, self.spec._z_offset]
-                # move acoustic center into position
-                +self.position
-            )
+            mesh.apply_translation(self.position)
 
             mesh.visual.vertex_colors = tv.random_color()  # pyright: ignore
             self._mesh = mesh
@@ -253,7 +242,6 @@ class Loudspeaker:
                 print(
                     f"Intersection at point [{points_on_surface[i][0]}, {points_on_surface[i][1]}, {points_on_surface[i][2]}]"
                 )
-        return False
         # If some of our vertices are inside and some are outside, we need to consider whether the edge between them intersects a face
         contained_points = test_mesh.contains(self.mesh.vertices)
         if any(contained_points) and not all(contained_points):
