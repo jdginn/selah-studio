@@ -13,7 +13,7 @@ import trimesh.path as path
 
 from . import geometry
 from .exceptions import SelahException
-from .material import MaterialManager
+from .material import MaterialManager, Material
 from .loudspeaker import Loudspeaker, LoudspeakerSpec
 from .sound import SPEED_OF_SOUND, db, from_db
 from .source import Source, Shot, Reflection, ReflectionException
@@ -322,8 +322,17 @@ class Room:
         m = trimesh.util.concatenate([x.mesh for x in self.walls])
         if not isinstance(m, trimesh.Trimesh):
             raise SelahException("Failed to create mesh")
-        m.fix_normals(False)
+        # mm = m.process(True, True, True)
+        # mm.fix_normals(False)
         return m
+
+    def mesh_excluding(self, exc: typing.List[str]):
+        m = trimesh.util.concatenate([x.mesh for x in self.walls if x not in exc])
+        if not isinstance(m, trimesh.Trimesh):
+            raise SelahException("Failed to create mesh")
+        mm = m.process(True, True, True)
+        mm.fix_normals(False)
+        return mm
 
     def faces_to_wall(self, idx: int) -> Wall:
         """Maps a given face to the wall to which it belongs."""
@@ -675,7 +684,8 @@ class Room:
 
     def show(self):
         scene = trimesh.Scene()
-        scene.add_geometry(self.mesh)
+        exc = ["Floor"]
+        scene.add_geometry([x.mesh for x in self.walls if x.name not in exc])
         scene.add_geometry(self._lt.l_source().mesh)
         scene.add_geometry(self._lt.r_source().mesh)
         lpos = trimesh.primitives.Sphere(radius=0.1, center=self._lt.listening_pos())

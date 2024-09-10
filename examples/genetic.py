@@ -27,28 +27,32 @@ materials: typing.Dict[str, Material] = {
     "gypsum": Material(0.05),
     "diffuser": Material(0.99),
     "wood": Material(0.1),
-    "12cm_rockwool": Material(0.99),
-    "24cm_rockwool": Material(0.95),
-    "30cm_rockwool": Material(0.95),
+    "12cm_rockwool": Material(0.94),
+    "24cm_rockwool": Material(0.96),
+    "30cm_rockwool": Material(0.97),
 }
-
 wall_materials = {
     "default": "brick",
     "Floor": "wood",
-    "Front": "gypsum",
+    "Front A": "gypsum",
+    "Front B": "gypsum",
     "Back Diffuser": "diffuser",
-    "Ceiling Diffuser": "12cm_rockwool",
-    "Cutout Diffuser": "24cm_rockwool",
-    "Street Absorber": "12cm_rockwool",
-    "Street Absorber Shelf": "wood",
-    "Back Hallway Absorber": "12cm_rockwool",
-    "Back Hallway Absorber Shelf": "wood",
-    "Front Hallway Absorber": "12cm_rockwool",
-    "Front Hallway Absorber Shelf": "wood",
-    "Window": "glass",
-    "Floor Wedge": "12cm_rockwool",
+    "Ceiling Diffuser": "diffuser",
+    "Back A": "24cm_rockwool",
+    "Back B": "24cm_rockwool",
+    "Street A": "24cm_rockwool",
+    "Street B": "24cm_rockwool",
+    "Street C": "24cm_rockwool",
+    "Street D": "24cm_rockwool",
+    "Street E": "24cm_rockwool",
+    "Hall A": "24cm_rockwool",
+    "Hall B": "24cm_rockwool",
+    "Hall E": "24cm_rockwool",
+    "Entry Back": "24cm_rockwool",
+    "Entry Front": "24cm_rockwool",
+    "Window A": "glass",
+    "Window B": "glass",
     "Door": "12cm_rockwool",
-    "Doorway Front": "12cm_rockwool",
     "left speaker wall": "gypsum",
     "right speaker wall": "gypsum",
 }
@@ -60,10 +64,11 @@ class ListeningPositionError(SelahException):
 
 @dataclass
 class fixed_parameters:
-    filename: str = "examples/resources/studio.3mf"
+    # filename: str = "examples/resources/studio.3mf"
+    filename: str = "WIP.3mf"
     rfz_radius: float = 0.3
     num_samples: int = 8_000
-    max_time: float = 80 / 1000
+    max_time: float = 40 / 1000
     min_gain: float = -16
     order: int = 8
     max_listen_pos: float = 2.4
@@ -106,7 +111,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
     mm.set_wall_materials(wall_materials)
     room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()], mm)
     room.listening_triangle(
-        wall_name="Front",
+        wall_name="Front A",
         height=genetic_params.height,
         speaker_height=genetic_params.speaker_height,
         dist_from_wall=genetic_params.dist_from_wall,
@@ -171,16 +176,16 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
 if __name__ == "__main__":
     gene_space = training_parameters(
         speaker_height={"low": 1.3, "high": 2.3},
-        dist_from_center={"low": 0.85, "high": 1.3},
-        dist_from_wall={"low": 0.3, "high": 0.6},
+        dist_from_center={"low": 0.85, "high": 1.5},
+        dist_from_wall={"low": 0.3, "high": 0.8},
         deviation_from_equilateral={"low": -0.5, "high": 0.5},
-        ceiling_diffuser_height={"low": 2.5, "high": 2.75},
-        ceiling_diffuser_width={"low": 1.0, "high": 4.75},
-        ceiling_diffuser_length={"low": 1.0, "high": 2.75},
+        ceiling_diffuser_height={"low": 2.4, "high": 2.75},
+        ceiling_diffuser_width={"low": 2.0, "high": 4.75},
+        ceiling_diffuser_length={"low": 2.0, "high": 2.75},
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
     )
     ga_instance = pygad.GA(
-        num_generations=1,
+        num_generations=3,
         num_parents_mating=4,
         fitness_func=fitness_func,
         sol_per_pop=32,

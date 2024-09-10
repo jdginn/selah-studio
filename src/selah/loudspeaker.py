@@ -245,10 +245,11 @@ class Loudspeaker:
         # If some of our vertices are inside and some are outside, we need to consider whether the edge between them intersects a face
         contained_points = test_mesh.contains(self.mesh.vertices)
         if any(contained_points) and not all(contained_points):
+            print("Straddles")
+            print(contained_points)
             scene = trimesh.Scene()
             scene.add_geometry(test_mesh)
             scene.add_geometry(self.mesh)
-            # intersection = True
             # Find edges between vertex pairs where one is inside and one is outside
             for index, contained in enumerate(contained_points):
                 if not contained:
@@ -266,5 +267,5 @@ class Loudspeaker:
                             )
                             intersection = True
                             return True
-            # scene.show()
+            scene.show()
         return intersection
