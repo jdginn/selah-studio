@@ -2,6 +2,7 @@ import typing
 from enum import Enum
 
 import trimesh
+import trimesh.visual
 import numpy as np
 import numpy.typing as npt
 
@@ -15,9 +16,12 @@ class Axis(Enum):
 
 
 class Wall:
-
     def __init__(
-        self, name: str, mesh: trimesh.Trimesh, material: Material = Material(0.05)
+        self,
+        name: str,
+        mesh: trimesh.Trimesh,
+        material: Material = Material(0.05),
+        **kwargs,
     ):
         """Represents a wall whose shape is defined by a mesh."""
         # TODO: don't use Axis enum; instead define directions using mesh normals
@@ -25,6 +29,10 @@ class Wall:
         self.mesh = mesh
         self.vertices = mesh.vertices
         self.material = material
+        if hasattr(kwargs, "color"):
+            self.mesh.visual = typing.cast(
+                trimesh.visual.ColorVisuals, kwargs.get("color")
+            )
 
     def pos(self, height: float) -> tuple[Axis, float]:
         """Returns the position of the wall along its respective axis"""

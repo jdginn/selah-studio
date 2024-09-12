@@ -10,6 +10,7 @@ import typing
 import trimesh
 import matplotlib.pyplot as plt
 import trimesh.exchange.export as export
+import trimesh.visual
 
 import selah
 
@@ -79,7 +80,7 @@ class parameters:
     ceiling_diffuser_width: float = 3.0
     ceiling_diffuser_position: float = 0.75
     rfz_radius: float = 0.3
-    num_samples: int = 10_000
+    num_samples: int = 1_000
     max_time: float = 40 / 1000
     min_gain: float = -20
     order: int = 9
@@ -96,7 +97,16 @@ if __name__ == "__main__":
         raise RuntimeError
     mm = MaterialManager(materials)
     mm.set_wall_materials(wall_materials)
-    room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()], mm)
+    blue = (128, 234, 255)
+    window = ["Window A", "Window B"]
+    walls: typing.List[Wall] = []
+    for name, mesh in scene.geometry.items():
+        if name in window:
+            mesh.visual = trimesh.visual.ColorVisuals(
+                mesh, trimesh.visual.color.to_rgba(blue)
+            )
+        walls.append(Wall(name, mesh))
+    room = Room(walls, mm)
 
     try:
         room.listening_triangle(

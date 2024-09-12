@@ -1,5 +1,6 @@
 import math
 import typing
+import pdb
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -9,7 +10,7 @@ import trimesh
 from trimesh.ray import ray_triangle
 import trimesh.visual as tv
 import trimesh.path.entities as entities
-import trimesh.path as path
+from trimesh.path import Path2D
 
 from . import geometry
 from .exceptions import SelahException
@@ -199,36 +200,44 @@ class Room:
         if r_source.test_intersection(self.mesh):
             raise CollisionException([self.mesh, r_source.mesh])
 
-        # for w in self.walls:
-        #     if w.name == "Window":
-        #         if geometry.test_intersection(
-        #             w.mesh, l_source.position, l_source.normal
-        #         ):
-        #             raise ObscuresWindow("Left wall obscures window")
-        # for w in self.walls:
-        #     if w.name == "Window":
-        #         if geometry.test_intersection(
-        #             w.mesh, r_source.position, r_source.normal
-        #         ):
-        #             raise ObscuresWindow("Right wall obscures window")
-        self.walls.append(
-            build_wall_from_point(
-                "left speaker wall",
-                self.mesh,
-                l_source.position,
-                l_source.normal,
-                self._mm.get_wall("left speaker wall"),
+        windows = ["Window A", "Window B"]
+        combined_window = trimesh.util.concatenate(
+            [x.mesh for x in self.walls if x.name in windows]
+        )
+        if isinstance(combined_window, list):
+            raise SelahException("Could not find window")
+        combined_window = typing.cast(trimesh.Trimesh, combined_window)
+        window2d = typing.cast(
+            Path2D, combined_window.projected([-1, 0, 0], origin=[0, 0, 0])
+        )
+        source_x = max(l_source.position[0], r_source.position[0])
+        window_box = typing.cast(trimesh.Trimesh, window2d.extrude(-source_x))
+        window_box.visual = tv.ColorVisuals(window_box, tv.random_color())
+        window_box.apply_transform(
+            trimesh.transformations.rotation_matrix(
+                -90 / 180 * np.pi, np.array([0, 1, 0]), np.array([0, 0, 0])
             )
         )
-        self.walls.append(
-            build_wall_from_point(
-                "right speaker wall",
-                self.mesh,
-                r_source.position,
-                r_source.normal,
-                self._mm.get_wall("right speaker wall"),
-            )
+        l_wall = build_wall_from_point(
+            "left speaker wall",
+            self.mesh,
+            l_source.position,
+            l_source.normal,
+            self._mm.get_wall("left speaker wall"),
         )
+        r_wall = build_wall_from_point(
+            "right speaker wall",
+            self.mesh,
+            r_source.position,
+            r_source.normal,
+            self._mm.get_wall("right speaker wall"),
+        )
+        l_wall.mesh = l_wall.mesh.difference(window_box)
+        r_wall.mesh = r_wall.mesh.difference(window_box)
+        # scene = trimesh.Scene([l_wall.mesh, r_wall.mesh, window_box])
+        # scene.show()
+        self.walls.append(l_wall)
+        self.walls.append(r_wall)
 
     def ceiling_absorber(
         self, height: float, length: float, width: float, position: float
@@ -686,6 +695,15 @@ class Room:
         scene = trimesh.Scene()
         exc = ["Floor"]
         scene.add_geometry([x.mesh for x in self.walls if x.name not in exc])
+        # for w in self.walls:
+        #     if w.name in exc:
+        #         continue
+        #     if w.name == "Window A":
+        #         w.mesh.visual = trimesh.visual.ColorVisuals(
+        #             tv.color.to_rgba(())
+        #         )
+        #     # w.mesh.visual = tv.ColorVisuals(w.mesh, tv.random_color())
+        #     scene.add_geometry(w.mesh)
         scene.add_geometry(self._lt.l_source().mesh)
         scene.add_geometry(self._lt.r_source().mesh)
         lpos = trimesh.primitives.Sphere(radius=0.1, center=self._lt.listening_pos())
