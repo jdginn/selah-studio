@@ -242,8 +242,8 @@ class Room:
         )
         l_wall.mesh = l_wall.mesh.difference(window_box)
         r_wall.mesh = r_wall.mesh.difference(window_box)
-        # scene = trimesh.Scene([l_wall.mesh, r_wall.mesh, window_box])
-        # scene.show()
+        scene = trimesh.Scene([l_wall.mesh, r_wall.mesh, window_box])
+        scene.show()
         self.walls.append(l_wall)
         self.walls.append(r_wall)
 

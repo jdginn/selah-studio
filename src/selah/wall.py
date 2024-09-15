@@ -3,6 +3,7 @@ from enum import Enum
 
 import trimesh
 import trimesh.visual
+import trimesh.intersections
 import numpy as np
 import numpy.typing as npt
 
@@ -120,10 +121,16 @@ def build_wall_from_point(
     )
     vertices: typing.List[npt.NDArray] = [point]
     faces: typing.List[npt.NDArray] = []
+    import IPython
+
+    IPython.embed()
     for line in mp:
         vertices.append(line[0])
         vertices.append(line[1])
         if len(vertices) > 3:
             faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
         faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
-    return Wall(name, trimesh.Trimesh(vertices=vertices, faces=faces), material)
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+    mesh.process(True, True, True)
+    mesh.fill_holes()
+    return Wall(name, mesh, material)
