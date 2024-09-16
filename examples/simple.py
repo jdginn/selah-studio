@@ -28,9 +28,12 @@ materials: typing.Dict[str, Material] = {
     "gypsum": Material(0.05),
     "diffuser": Material(0.999),
     "wood": Material(0.1),
-    "12cm_rockwool": Material(0.92),
-    "24cm_rockwool": Material(0.94),
-    "30cm_rockwool": Material(0.95),
+    "12cm_rockwool": Material(0.999),
+    # "12cm_rockwool": Material(0.92),
+    "24cm_rockwool": Material(0.999),
+    # "24cm_rockwool": Material(0.94),
+    "30cm_rockwool": Material(0.999),
+    # "30cm_rockwool": Material(0.95),
 }
 
 wall_materials = {
@@ -80,7 +83,7 @@ class parameters:
     ceiling_diffuser_width: float = 3.0
     ceiling_diffuser_position: float = 0.75
     rfz_radius: float = 0.3
-    num_samples: int = 1_000
+    num_samples: int = 10_000
     max_time: float = 40 / 1000
     min_gain: float = -20
     order: int = 9
@@ -161,13 +164,20 @@ if __name__ == "__main__":
             ignore_walls="Floor",
         )
         arrivals = l_arrivals + r_arrivals
-        ITD = float(arrivals[0].total_dist / SPEED_OF_SOUND * 1000)
-        print(f"ITD: {ITD:.1f}")
+        for a in arrivals:
+            ITD = float(
+                (a.total_dist - room._lt.listening_dist) / SPEED_OF_SOUND * 1000
+            )
+            if ITD < 0:
+                raise SelahException("code bug: negative ITD")
+            # print(
+            #     f"LD: {room._lt.listening_dist:.1f} dist: {a.total_dist:.1f} Diff: {a.total_dist - room._lt.listening_dist:.1f}m ITD: {ITD:.1f}ms"
+            # )
         plt.ion()
         fig = plt.figure()
         room.plot_arrivals_interactive(fig, arrivals, False)
         plt.show(block=True)
-        room.show()
+        # room.show()
     except SourceException as ex:
         print(ex.message)
         arrivals = [ex.source]

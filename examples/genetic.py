@@ -67,10 +67,10 @@ class fixed_parameters:
     # filename: str = "examples/resources/studio.3mf"
     filename: str = "WIP.3mf"
     rfz_radius: float = 0.3
-    num_samples: int = 8_000
+    num_samples: int = 2_000
     max_time: float = 40 / 1000
-    min_gain: float = -16
-    order: int = 8
+    min_gain: float = -18
+    order: int = 10
     max_listen_pos: float = 2.4
     min_listen_pos: float = 1.3
 
@@ -171,7 +171,7 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
     params = training_parameters(*solution)
     fixed_params = fixed_parameters()
     try:
-        _, arrivals = get_arrivals(solution)
+        room, arrivals = get_arrivals(solution)
     except SelahException as ex:
         print(f"Invalid solution: {ex}")
         return 0
@@ -179,17 +179,28 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
     if len(arrivals) == 0:
         print(f"Too good to be true: {fixed_params.max_time * 1000}")
         return 0
-    ITD = float(arrivals[0].total_dist / SPEED_OF_SOUND * 1000)
-    print(f"ITD: {ITD:.1f}")
+    ITD = float(
+        (arrivals[0].total_dist - room._lt.listening_dist) / SPEED_OF_SOUND * 1000
+    )
+    print(
+        f"LD: {room._lt.listening_dist:.1f} dist: {arrivals[0].total_dist:.1f} ITD: {ITD:.1f}"
+    )
+    if ITD < 0:
+        import pdb
+
+        pdb.set_trace()
+        fig = plt.figure()
+        room.plot_arrivals_interactive(fig, arrivals, False)
+        return 1000
     return ITD
 
 
 if __name__ == "__main__":
     gene_space = training_parameters(
-        speaker_height={"low": 1.3, "high": 2.3},
-        dist_from_center={"low": 0.85, "high": 1.5},
-        dist_from_wall={"low": 0.3, "high": 0.8},
-        deviation_from_equilateral={"low": -0.5, "high": 0.5},
+        speaker_height={"low": 1.1, "high": 2.3},
+        dist_from_center={"low": 1, "high": 1.5},
+        dist_from_wall={"low": 0.4, "high": 0.6},
+        deviation_from_equilateral={"low": -0.3, "high": 0.3},
         ceiling_diffuser_height={"low": 2.4, "high": 2.75},
         ceiling_diffuser_width={"low": 2.0, "high": 4.75},
         ceiling_diffuser_length={"low": 2.0, "high": 2.75},
@@ -199,7 +210,7 @@ if __name__ == "__main__":
         num_generations=2,
         num_parents_mating=4,
         fitness_func=fitness_func,
-        sol_per_pop=8,
+        sol_per_pop=24,
         num_genes=len(gene_space.aslist()),
         gene_space=gene_space.aslist(),
         mutation_probability=0.4,

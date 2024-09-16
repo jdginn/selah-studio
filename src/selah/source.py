@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 import typing
 
+import numpy as np
 import numpy.typing as npt
 
 from selah.wall import Wall
@@ -69,7 +70,6 @@ class Source:
 
     pos: npt.NDArray
     gain: float
-    total_dist: float
 
     def color(self, default: str) -> str:
         if hasattr(self, "_color"):
@@ -120,13 +120,24 @@ class Reflection(Source):
                     self, "Reflection does not originate from a shot"
                 )
 
-    #
-    # def total_dist(self) -> float:
-    #     total_dist: float = 0
-    #     while True:
-    #         if isinstance(self.parent, Shot):
-    #             total_dist += float(np.linalg.norm(self.pos - self.parent.pos))
-    #             return total_dist
-    #         if isinstance(self.parent, "Reflection"):
-    #             total_dist += float(np.linalg.norm(self.pos - self.parent.pos))
-    #         raise ReflectionException("Invalid parent type for reflection")
+    @property
+    def total_dist(self) -> float:
+        total_dist: float = 0
+        while True:
+            if isinstance(self.parent, Shot):
+                segment_length = float(np.linalg.norm(self.pos - self.parent.pos))
+                # print(f"Shot: segment length: {segment_length:.1f}")
+                total_dist = total_dist + float(
+                    np.linalg.norm(self.pos - self.parent.pos)
+                )
+                # print(f"Running sum: {total_dist:.1f}")
+                return total_dist
+            if isinstance(self.parent, Reflection):
+                segment_length = float(np.linalg.norm(self.pos - self.parent.pos))
+                # print(f"Reflection: segment length: {segment_length:.1f}")
+                total_dist = self.parent.total_dist + segment_length
+                # print(f"Running sum: {total_dist:.1f}")
+                return total_dist
+            raise ReflectionException(
+                self, f"Invalid parent type for reflection: {type(self.parent)}"
+            )

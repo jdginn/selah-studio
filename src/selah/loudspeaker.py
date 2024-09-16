@@ -183,7 +183,6 @@ class Loudspeaker:
         return Shot(
             self.position,
             sound.from_db(self.spec.gain(pitch, yaw)),
-            0,
             new_dir,
             self,
             shot_spec,
@@ -198,7 +197,6 @@ class Loudspeaker:
             Shot(
                 self.position,
                 1.0,
-                0,
                 geometry.dir_from_points(self.position, listening_pos),
                 self,
             )

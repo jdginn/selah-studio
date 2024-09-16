@@ -152,6 +152,10 @@ class ListeningTriangle:
             case Axis.Z:
                 raise RuntimeError
 
+    @property
+    def listening_dist(self) -> float:
+        return float(np.linalg.norm(self.l_source().position - self.listening_pos()))
+
 
 class Room:
     """
@@ -226,7 +230,7 @@ class Room:
             l_source.normal,
             self._mm.get_wall("left speaker wall"),
         )
-        v1, v2 = l_wall.vertices[1:3]
+        v1, v2 = (l_wall.vertices[10], l_wall.vertices[20])
         print(
             f"l_wall defined by: [{l_source.position[0]}, {l_source.position[1]}, {l_source.position[2]}] [{v1[0]}, {v1[1]}, {v1[2]}] [{v2[0]}, {v2[1]}, {v2[2]}]"
         )
@@ -251,12 +255,14 @@ class Room:
         # if mesh is None:
         #     raise SelahException
         r_wall.mesh = mesh
-        v1, v2 = r_wall.vertices[1:3]
+        v1, v2 = (r_wall.vertices[10], r_wall.vertices[20])
         print(
             f"r_wall defined by: [{r_source.position[0]}, {r_source.position[1]}, {r_source.position[2]}] [{v1[0]}, {v1[1]}, {v1[2]}] [{v2[0]}, {v2[1]}, {v2[2]}]"
         )
-        l_wall.mesh = l_wall.mesh.difference(window_box)
-        r_wall.mesh = r_wall.mesh.difference(window_box)
+        if l_wall.mesh.intersection(window_box):
+            l_wall.mesh = l_wall.mesh.difference(window_box)
+        if r_wall.mesh.intersection(window_box):
+            r_wall.mesh = r_wall.mesh.difference(window_box)
         self.walls.append(l_wall)
         self.walls.append(r_wall)
 
@@ -332,9 +338,8 @@ class Room:
         ignore_walls: typing.List[str] = [],
     ) -> typing.Tuple[Source, bool]:
         source_pos = orig_source_pos
-        last_source: Source = shot
-        direct_dist = np.linalg.norm(source_pos - listen_pos)
-        total_dist: float = -float(direct_dist)
+        final_source: Source = shot
+        total_dist: float = 0
         intensity = from_db(shot.gain)
         wall: Wall
 
@@ -359,16 +364,19 @@ class Room:
                 return np.linalg.norm(source_pos - e[0])
 
             match len(loc):
+                # This ray never terminates
                 case 0:
-                    if isinstance(last_source, Reflection):
+                    if isinstance(final_source, Reflection):
                         raise ReflectionException(
-                            last_source, "Reflected ray never terminates"
+                            final_source, "Reflected ray never terminates"
                         )
-                    if isinstance(last_source, Shot):
+                    if isinstance(final_source, Shot):
                         raise ShotException(
-                            last_source, "Reflected ray never terminates"
+                            final_source, "Reflected ray never terminates"
                         )
+                # This ray has exactly one intersection
                 case 1:
+                    print("Micsoda?")
                     if np.linalg.norm(source_pos - loc[0]) > 0:
                         new_pos = loc[0]
                         if mesh.face_normals is None:
@@ -379,16 +387,25 @@ class Room:
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(idx_tri[0])
                         intensity = intensity * (1 - wall.material.absorption())
-                        last_source = Reflection(
-                            new_pos, intensity, total_dist, last_source, wall
+                        final_source = Reflection(
+                            new_pos, intensity, final_source, wall
                         )
+                    else:
+                        SelahException("WTF?")
+                # This ray has multipole intersections (even though only one of them is real)
+                #
+                # Usually, one of those points is a duplicate of the source, so we can always ignore that one
+                #
+                # Removing the duplicate intersection, the nearest intersection is the real one (the near one is on a wall that obscures any other intersections)
                 case _:
                     found = False
                     for this_loc, tri_idx in sorted(
                         zip(loc, idx_tri), key=min_norm, reverse=False
                     ):
                         if np.linalg.norm(source_pos - this_loc) < 1e-6:
+                            # This intersection is a dupe of the source
                             continue
+                        # We proceed directly to the nearest intersection that is not a dupe of the source
                         new_pos = this_loc
                         if mesh.face_normals is None:
                             raise SelahException(
@@ -398,15 +415,15 @@ class Room:
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(tri_idx)
                         intensity = intensity * (1 - wall.material.absorption())
-                        last_source = Reflection(
-                            new_pos, intensity, total_dist, last_source, wall
+                        final_source = Reflection(
+                            new_pos, intensity, final_source, wall
                         )
                         found = True
                         break
                     if not found:
-                        if isinstance(last_source, Reflection):
+                        if isinstance(final_source, Reflection):
                             raise ReflectionException(
-                                last_source, "Malformed reflection"
+                                final_source, "Malformed reflection"
                             )
                         raise SelahException("Malformed reflection with wrong type")
 
@@ -421,16 +438,16 @@ class Room:
             # Only check out to some minimum gain
             if db(intensity) < min_gain:
                 break
-            if isinstance(last_source, Reflection):
-                prev_source = last_source.parent
+            if isinstance(final_source, Reflection):
+                prev_source = final_source.parent
                 if isinstance(prev_source, Reflection):
                     if prev_source.wall.name in ignore_walls:
                         continue
             if dist_from_crit < rfz_radius and i > 0:
                 # We only care about rays that reflect to the RFZ
-                return last_source, True
+                return final_source, True
 
-        return last_source, False
+        return final_source, False
 
     def trace_arrivals(
         self,
@@ -563,13 +580,12 @@ class Room:
         for i, a in enumerate(arrivals):
             color = colors[i % len(colors)]
             ax3.bar(
-                a.total_dist / SPEED_OF_SOUND * 1000,
+                (a.total_dist - self._lt.listening_dist) / SPEED_OF_SOUND * 1000,
                 bottom=db(a.gain),
                 height=self._min_gain,
                 color=a.color(color),
                 picker=True,
             )
-            # TODO: this needs to walk back the linked list
             h = a
             while True:
                 if isinstance(h, Shot):
