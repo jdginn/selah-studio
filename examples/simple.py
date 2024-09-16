@@ -164,15 +164,16 @@ if __name__ == "__main__":
             ignore_walls="Floor",
         )
         arrivals = l_arrivals + r_arrivals
-        for a in arrivals:
-            ITD = float(
-                (a.total_dist - room._lt.listening_dist) / SPEED_OF_SOUND * 1000
-            )
-            if ITD < 0:
-                raise SelahException("code bug: negative ITD")
-            # print(
-            #     f"LD: {room._lt.listening_dist:.1f} dist: {a.total_dist:.1f} Diff: {a.total_dist - room._lt.listening_dist:.1f}m ITD: {ITD:.1f}ms"
-            # )
+        arrivals.sort(key=lambda a: a.total_dist)
+        ITD = float(
+            (arrivals[0].total_dist - room._lt.listening_dist) / SPEED_OF_SOUND * 1000
+        )
+        print(f"ITD: {ITD:.1f}ms")
+        print(f"Critical distance: {room.critical_distance():.2f}m")
+        print(f"Listening distance: {room._lt.listening_dist:.2f}m")
+        print(
+            f"Deviation from equilateral: {abs(room._lt.listening_dist - room._lt.dist_from_center*2):.2f}m"
+        )
         plt.ion()
         fig = plt.figure()
         room.plot_arrivals_interactive(fig, arrivals, False)

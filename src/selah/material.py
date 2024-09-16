@@ -39,7 +39,6 @@ default_materials: typing.Dict[str, Material] = {
 
 
 class MaterialManager:
-
     def __init__(self, materials: typing.Dict[str, Material] | None = None):
         """
         Assigns materials by wall name, respecting defaults

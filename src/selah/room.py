@@ -16,7 +16,7 @@ from . import geometry
 from .exceptions import SelahException
 from .material import MaterialManager, Material
 from .loudspeaker import Loudspeaker, LoudspeakerSpec
-from .sound import SPEED_OF_SOUND, db, from_db
+from .sound import db, from_db, SPEED_OF_SOUND, SABINE
 from .source import Source, Shot, Reflection, ReflectionException, ShotException
 from .wall import Axis, Wall, build_wall_from_point
 
@@ -324,6 +324,24 @@ class Room:
             if w.name == name:
                 return w
         raise SelahException(f"Could not find requested wall {name}")
+
+    def volume(self) -> float:
+        return self.mesh.volume
+
+    def absorption(self) -> float:
+        absorption = 0
+        for w in self.walls:
+            absorption = absorption + w.mesh.area * w.material.absorption()
+        return absorption
+
+    def schroeder(self) -> float:
+        return 2000 * (self.T60_sabine(250) / self.volume()) ** (1.0 / 2.0)
+
+    def T60_sabine(self, freq: float) -> float:
+        return SABINE * self.volume() / self.absorption()
+
+    def critical_distance(self):
+        return 0.057 * (self.volume() / self.T60_sabine(self.schroeder())) ** 0.5
 
     def trace_shot(
         self,

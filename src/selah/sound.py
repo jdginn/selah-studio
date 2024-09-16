@@ -1,6 +1,8 @@
 import math
 
 SPEED_OF_SOUND = 343.0
+SABINE = 0.161
+EYRING = 55.3
 
 
 def db(gain: float) -> float:
