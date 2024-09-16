@@ -339,7 +339,6 @@ class Room:
     ) -> typing.Tuple[Source, bool]:
         source_pos = orig_source_pos
         final_source: Source = shot
-        total_dist: float = 0
         intensity = from_db(shot.gain)
         wall: Wall
 
@@ -429,16 +428,15 @@ class Room:
 
             # Check whether this reflection passes within the RFZ
             dist_from_crit = geometry.lineseg_dist(new_pos, source_pos, listen_pos)
-            total_dist = total_dist + float(np.linalg.norm(new_pos - source_pos))
 
             source_pos = new_pos
-            # Only check out to some number of ms
-            if total_dist / SPEED_OF_SOUND > max_time:
-                break
             # Only check out to some minimum gain
             if db(intensity) < min_gain:
                 break
             if isinstance(final_source, Reflection):
+                # Only check out to some number of ms
+                if final_source.total_dist / SPEED_OF_SOUND > max_time:
+                    break
                 prev_source = final_source.parent
                 if isinstance(prev_source, Reflection):
                     if prev_source.wall.name in ignore_walls:

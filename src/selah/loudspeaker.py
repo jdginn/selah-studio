@@ -23,9 +23,9 @@ class LoudspeakerSpec:
     # Takes arguments mapping degrees to gain in dB
     def __init__(
         self,
-        x_dim: float = 0.520,
+        x_dim: float = 0.380,
         y_dim: float = 0.256,
-        z_dim: float = 0.380,
+        z_dim: float = 0.520,
         y_offset: float = 0.128,
         z_offset: float = 0.128,
         horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100},

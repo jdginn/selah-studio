@@ -152,7 +152,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         max_time=fixed_params.max_time,
         min_gain=fixed_params.min_gain,
         order=fixed_params.order,
-        ignore_walls="Floor",
+        # ignore_walls="Floor",
     )
     r_arrivals = room.trace_arrivals(
         room._lt.r_source(),
@@ -161,7 +161,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         max_time=fixed_params.max_time,
         min_gain=fixed_params.min_gain,
         order=fixed_params.order,
-        ignore_walls="Floor",
+        # ignore_walls="Floor",
     )
     arrivals = l_arrivals + r_arrivals
     return room, arrivals
@@ -198,9 +198,9 @@ def fitness_func(ga_instance, solution, solution_idx) -> float:
 if __name__ == "__main__":
     gene_space = training_parameters(
         speaker_height={"low": 1.1, "high": 2.3},
-        dist_from_center={"low": 1, "high": 1.5},
+        dist_from_center={"low": 1.2, "high": 1.5},
         dist_from_wall={"low": 0.4, "high": 0.6},
-        deviation_from_equilateral={"low": -0.3, "high": 0.3},
+        deviation_from_equilateral={"low": -0.2, "high": 0.2},
         ceiling_diffuser_height={"low": 2.4, "high": 2.75},
         ceiling_diffuser_width={"low": 2.0, "high": 4.75},
         ceiling_diffuser_length={"low": 2.0, "high": 2.75},

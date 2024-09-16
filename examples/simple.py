@@ -152,7 +152,7 @@ if __name__ == "__main__":
             max_time=params.max_time,
             min_gain=params.min_gain,
             order=params.order,
-            ignore_walls="Floor",
+            # ignore_walls="Floor",
         )
         r_arrivals = room.trace_arrivals(
             room._lt.r_source(),
@@ -161,7 +161,7 @@ if __name__ == "__main__":
             max_time=params.max_time,
             min_gain=params.min_gain,
             order=params.order,
-            ignore_walls="Floor",
+            # ignore_walls="Floor",
         )
         arrivals = l_arrivals + r_arrivals
         for a in arrivals:
