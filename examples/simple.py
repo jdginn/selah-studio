@@ -79,8 +79,8 @@ class parameters:
     max_listen_pos: float = 2.7
     min_listen_pos: float = 1.3
     ceiling_diffuser_height: float = 2.3
-    ceiling_diffuser_length: float = 2.0
-    ceiling_diffuser_width: float = 3.0
+    ceiling_diffuser_length: float = 2.5
+    ceiling_diffuser_width: float = 5.0
     ceiling_diffuser_position: float = 0.75
     rfz_radius: float = 0.3
     num_samples: int = 10_000
@@ -152,7 +152,7 @@ if __name__ == "__main__":
             max_time=params.max_time,
             min_gain=params.min_gain,
             order=params.order,
-            # ignore_walls="Floor",
+            ignore_walls="Floor",
         )
         r_arrivals = room.trace_arrivals(
             room._lt.r_source(),
@@ -161,7 +161,7 @@ if __name__ == "__main__":
             max_time=params.max_time,
             min_gain=params.min_gain,
             order=params.order,
-            # ignore_walls="Floor",
+            ignore_walls="Floor",
         )
         arrivals = l_arrivals + r_arrivals
         for a in arrivals:
@@ -177,7 +177,7 @@ if __name__ == "__main__":
         fig = plt.figure()
         room.plot_arrivals_interactive(fig, arrivals, False)
         plt.show(block=True)
-        # room.show()
+        room.show()
     except SourceException as ex:
         print(ex.message)
         arrivals = [ex.source]

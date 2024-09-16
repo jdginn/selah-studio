@@ -27,7 +27,7 @@ class Wall:
         """Represents a wall whose shape is defined by a mesh."""
         # TODO: don't use Axis enum; instead define directions using mesh normals
         self.name = name
-        self.mesh = mesh
+        self.mesh = mesh.process(True, True, True)
         self.vertices = mesh.vertices
         self.material = material
         if hasattr(kwargs, "color"):

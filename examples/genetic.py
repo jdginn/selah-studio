@@ -152,7 +152,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         max_time=fixed_params.max_time,
         min_gain=fixed_params.min_gain,
         order=fixed_params.order,
-        # ignore_walls="Floor",
+        ignore_walls="Floor",
     )
     r_arrivals = room.trace_arrivals(
         room._lt.r_source(),
@@ -161,7 +161,7 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         max_time=fixed_params.max_time,
         min_gain=fixed_params.min_gain,
         order=fixed_params.order,
-        # ignore_walls="Floor",
+        ignore_walls="Floor",
     )
     arrivals = l_arrivals + r_arrivals
     return room, arrivals

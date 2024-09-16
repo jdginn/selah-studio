@@ -79,6 +79,10 @@ class ListeningTriangle:
 
         # TODO: need to know which direction from the wall is interior vs exterior
 
+    @property
+    def y_center(self) -> float:
+        return self._wall.center_pos()[1]
+
     def l_source(self) -> Loudspeaker:
         """Returns the position of the left stereo source"""
         p = self._wall.center_pos()
@@ -270,18 +274,14 @@ class Room:
         self, height: float, length: float, width: float, position: float
     ) -> None:
         """Adds an acoustic absorber to the room suspended from the ceiling"""
-        floor = self.get_wall("Floor")
-        center = [length / 2, floor.mesh.centroid[1], height]
-        larr = np.array([length, 0, 0])
-        warr = np.array([0, width, 0])
+        center = self._lt.y_center
         vertices = [
-            center - larr / 2 - warr / 2,
-            center - larr / 2 + warr / 2,
-            center + larr / 2 - warr / 2,
-            center + larr / 2 + warr / 2,
+            [position, center + width / 2, height],
+            [position, center - width / 2, height],
+            [position + length, center + width / 2, height],
+            [position + length, center - width / 2, height],
         ]
-        vertices = np.add(vertices, [position, 0, 0])
-        faces = np.array([[0, 1, 2], [1, 2, 3]])
+        faces = np.array([[2, 1, 0], [3, 2, 1]])
         self.walls.append(
             Wall(
                 "Ceiling Diffuser",
