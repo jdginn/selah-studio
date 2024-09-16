@@ -17,7 +17,7 @@ from .exceptions import SelahException
 from .material import MaterialManager, Material
 from .loudspeaker import Loudspeaker, LoudspeakerSpec
 from .sound import SPEED_OF_SOUND, db, from_db
-from .source import Source, Shot, Reflection, ReflectionException
+from .source import Source, Shot, Reflection, ReflectionException, ShotException
 from .wall import Axis, Wall, build_wall_from_point
 
 
@@ -237,6 +237,11 @@ class Room:
             r_source.normal,
             self._mm.get_wall("right speaker wall"),
         )
+        # Hack
+        width = [x for x in self.walls if x.name == "Hall A"][0].vertices[0][1]
+        r_wall.mesh = r_wall.mesh.slice_plane(
+            plane_origin=[0, width, 0], plane_normal=[0, -1, 0]
+        )
         v1, v2 = r_wall.vertices[1:3]
         print(
             f"r_wall defined by: [{r_source.position[0]}, {r_source.position[1]}, {r_source.position[2]}] [{v1[0]}, {v1[1]}, {v1[2]}] [{v2[0]}, {v2[1]}, {v2[2]}]"
@@ -260,7 +265,7 @@ class Room:
             centroid + larr / 2 - warr / 2,
             centroid + larr / 2 + warr / 2,
         ]
-        vertices = np.add(vertices, [position, 0, 0])
+        # vertices = np.add(vertices, [position, 0, 0])
         faces = np.array([[0, 1, 2], [1, 2, 3]])
         self.walls.append(
             Wall(
@@ -270,68 +275,6 @@ class Room:
             )
         )
         pass
-
-    # def corner_wall(
-    #     self,
-    #     name: str,
-    #     wall_names: typing.Tuple[str, str],
-    #     x_pos: float = 0.25,
-    #     y_pos: float = 0.25,
-    #     height: float = 0,
-    #     inclination: float = 0,
-    #     **kwargs,
-    # ) -> Wall:
-    #     """Adds a wall straddling a corner of the room at the specified location and angle."""
-    #     # TODO: support using walls to define this
-    #     x_wall, y_wall = wall_names
-    #     xw = self.get_wall(x_wall)
-    #     yw = self.get_wall(y_wall)
-    #     shared_vertices = []
-    #     for i, v in enumerate(xw.mesh.vertices):
-    #         for j, vv in enumerate(yw.mesh.vertices):
-    #             if np.all(np.array(v) == np.array(vv)):
-    #                 shared_vertices.append((i, j, v))
-    #     x_faces: npt.NDArray
-    #     y_faces: npt.NDArray
-    #     shared_vertex_at_zero: npt.NDArray
-    #     for i, j, v in shared_vertices:
-    #         if v[2] == 0:
-    #             shared_vertex_at_zero = v
-    #             x_faces = xw.mesh.faces[xw.mesh.vertex_faces[i]]
-    #             y_faces = yw.mesh.faces[yw.mesh.vertex_faces[j]]
-    #             break
-    #     xdir = npt.NDArray
-    #     ydir = npt.NDArray
-    #     for f in x_faces:
-    #         for i in f:
-    #             v = xw.vertices[i]
-    #             if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
-    #                 xdir = geometry.dir_from_points(shared_vertex_at_zero, v)
-    #                 break
-    #     for f in y_faces:
-    #         for i in f:
-    #             v = yw.vertices[i]
-    #             if not np.all(v == shared_vertex_at_zero) and v[2] == 0:
-    #                 ydir = geometry.dir_from_points(shared_vertex_at_zero, v)
-    #                 break
-    #     xpoint = shared_vertex_at_zero + x_pos * xdir
-    #     ypoint = shared_vertex_at_zero + y_pos * ydir
-    #     midpoint = xpoint + (ypoint - xpoint) / 2 + np.array([0, 0, height])
-    #     i_rad = inclination * np.pi / 180
-    #     pitch = np.array(
-    #         [
-    #             [math.cos(i_rad), 0, -math.sin(i_rad)],
-    #             [0, 1, 0],
-    #             [math.sin(i_rad), 0, math.cos(i_rad)],
-    #         ]
-    #     )
-    #     line_dir = geometry.dir_from_points(xpoint, midpoint)
-    #     norm = np.array([line_dir[1], -line_dir[0], 0]).dot(pitch)
-    #     w = build_wall_from_point(
-    #         name, self.mesh, midpoint, norm, self._mm.get_wall("back_corners")
-    #     )
-    #     self.walls.append(w)
-    #     return w
 
     @property
     def mesh(self) -> trimesh.Trimesh:
@@ -409,15 +352,13 @@ class Room:
             match len(loc):
                 case 0:
                     if isinstance(last_source, Reflection):
-                        print("Never terminates")
-                        # raise ReflectionException(
-                        #     last_source, "Reflected ray never terminates"
-                        # )
+                        raise ReflectionException(
+                            last_source, "Reflected ray never terminates"
+                        )
                     if isinstance(last_source, Shot):
-                        print("Never terminates")
-                        # raise ShotException(
-                        #     last_source, "Reflected ray never terminates"
-                        # )
+                        raise ShotException(
+                            last_source, "Reflected ray never terminates"
+                        )
                 case 1:
                     if np.linalg.norm(source_pos - loc[0]) > 0:
                         new_pos = loc[0]
