@@ -109,7 +109,18 @@ def get_arrivals(solution) -> tuple[Room, typing.List[Source]]:
         raise RuntimeError
     mm = MaterialManager(materials)
     mm.set_wall_materials(wall_materials)
-    room = Room([Wall(name, mesh) for (name, mesh) in scene.geometry.items()], mm)
+
+    blue = (128, 234, 255)
+    window = ["Window A", "Window B"]
+    walls: typing.List[Wall] = []
+    for name, mesh in scene.geometry.items():
+        if name in window:
+            mesh.visual = trimesh.visual.ColorVisuals(
+                mesh, trimesh.visual.color.to_rgba(blue)
+            )
+        walls.append(Wall(name, mesh))
+    room = Room(walls, mm)
+
     room.listening_triangle(
         wall_name="Front A",
         height=genetic_params.height,
@@ -185,10 +196,10 @@ if __name__ == "__main__":
         ceiling_diffuser_position={"low": 0.0, "high": 2.5},
     )
     ga_instance = pygad.GA(
-        num_generations=3,
+        num_generations=2,
         num_parents_mating=4,
         fitness_func=fitness_func,
-        sol_per_pop=32,
+        sol_per_pop=8,
         num_genes=len(gene_space.aslist()),
         gene_space=gene_space.aslist(),
         mutation_probability=0.4,
@@ -210,4 +221,4 @@ if __name__ == "__main__":
     fig = plt.figure()
     room.plot_arrivals_interactive(fig, arrivals, False)
     plt.show(block=True)
-    room.mesh.show()
+    room.show()
