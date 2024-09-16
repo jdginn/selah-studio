@@ -211,13 +211,14 @@ class Room:
             Path2D, combined_window.projected([-1, 0, 0], origin=[0, 0, 0])
         )
         source_x = max(l_source.position[0], r_source.position[0])
-        window_box = typing.cast(trimesh.Trimesh, window2d.extrude(-source_x))
+        window_box = typing.cast(trimesh.Trimesh, window2d.extrude(-2 * source_x))
         window_box.visual = tv.ColorVisuals(window_box, tv.random_color())
         window_box.apply_transform(
             trimesh.transformations.rotation_matrix(
                 -90 / 180 * np.pi, np.array([0, 1, 0]), np.array([0, 0, 0])
             )
         )
+        window_box.apply_translation([-source_x, 0, 0])
         l_wall = build_wall_from_point(
             "left speaker wall",
             self.mesh,
@@ -242,8 +243,6 @@ class Room:
         )
         l_wall.mesh = l_wall.mesh.difference(window_box)
         r_wall.mesh = r_wall.mesh.difference(window_box)
-        scene = trimesh.Scene([l_wall.mesh, r_wall.mesh, window_box])
-        scene.show()
         self.walls.append(l_wall)
         self.walls.append(r_wall)
 
@@ -261,6 +260,7 @@ class Room:
             centroid + larr / 2 - warr / 2,
             centroid + larr / 2 + warr / 2,
         ]
+        vertices = np.add(vertices, [position, 0, 0])
         faces = np.array([[0, 1, 2], [1, 2, 3]])
         self.walls.append(
             Wall(

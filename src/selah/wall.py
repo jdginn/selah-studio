@@ -114,6 +114,15 @@ def build_wall_from_point(
     """
     Returns a new wall on the plane defined by one point and normal. Wall is bounded by its intersection with the passed mesh.
     """
+
+    def get_matching_index(
+        list: typing.List[npt.NDArray], test: npt.NDArray
+    ) -> typing.Union[int, None]:
+        for i, elem in enumerate(list):
+            if np.allclose(test, elem):
+                return i
+        return None
+
     mp = trimesh.intersections.mesh_plane(
         mesh,
         normal,
@@ -121,15 +130,22 @@ def build_wall_from_point(
     )
     vertices: typing.List[npt.NDArray] = [point]
     faces: typing.List[npt.NDArray] = []
-    import IPython
-
-    IPython.embed()
-    for line in mp:
-        vertices.append(line[0])
-        vertices.append(line[1])
-        if len(vertices) > 3:
-            faces.append(np.array([0, len(vertices) - 3, len(vertices) - 2]))
-        faces.append(np.array([0, len(vertices) - 2, len(vertices) - 1]))
+    for li, line in enumerate(mp):
+        v0 = line[0]
+        v1 = line[1]
+        v0_idx = get_matching_index(vertices, v0)
+        if v0_idx is None:
+            vertices.append(v0)
+            v0_idx = len(vertices) - 1
+        else:
+            v0 = vertices[v0_idx]
+        v1_idx = get_matching_index(vertices, v1)
+        if v1_idx is None:
+            vertices.append(v1)
+            v1_idx = len(vertices) - 1
+        else:
+            v1 = vertices[v1_idx]
+        faces.append(np.array([0, v0_idx, v1_idx]))
     mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
     mesh.process(True, True, True)
     mesh.fill_holes()
