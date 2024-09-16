@@ -239,9 +239,12 @@ class Room:
         )
         # Hack
         width = [x for x in self.walls if x.name == "Hall A"][0].vertices[0][1]
-        r_wall.mesh = r_wall.mesh.slice_plane(
+        mesh = r_wall.mesh.slice_plane(
             plane_origin=[0, width, 0], plane_normal=[0, -1, 0]
         )
+        if mesh is None:
+            raise SelahException
+        r_wall.mesh = mesh
         v1, v2 = r_wall.vertices[1:3]
         print(
             f"r_wall defined by: [{r_source.position[0]}, {r_source.position[1]}, {r_source.position[2]}] [{v1[0]}, {v1[1]}, {v1[2]}] [{v2[0]}, {v2[1]}, {v2[2]}]"
