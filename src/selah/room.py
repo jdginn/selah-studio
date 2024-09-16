@@ -238,12 +238,18 @@ class Room:
             self._mm.get_wall("right speaker wall"),
         )
         # Hack
-        width = [x for x in self.walls if x.name == "Hall A"][0].vertices[0][1]
         mesh = r_wall.mesh.slice_plane(
-            plane_origin=[0, width, 0], plane_normal=[0, -1, 0]
+            plane_origin=[0, self.get_wall("Hall A").vertices[0][1], 0],
+            plane_normal=[0, -1, 0],
         )
         if mesh is None:
             raise SelahException
+        # mesh = mesh.slice_plane(
+        #     plane_origin=[self.get_wall("Entry Front").vertices[0][0], 0, 0],
+        #     plane_normal=[-1, 0, 0],
+        # )
+        # if mesh is None:
+        #     raise SelahException
         r_wall.mesh = mesh
         v1, v2 = r_wall.vertices[1:3]
         print(
@@ -259,16 +265,16 @@ class Room:
     ) -> None:
         """Adds an acoustic absorber to the room suspended from the ceiling"""
         floor = self.get_wall("Floor")
-        centroid = floor.mesh.centroid + np.array([0, 0, height])
+        center = [length / 2, floor.mesh.centroid[1], height]
         larr = np.array([length, 0, 0])
         warr = np.array([0, width, 0])
         vertices = [
-            centroid - larr / 2 - warr / 2,
-            centroid - larr / 2 + warr / 2,
-            centroid + larr / 2 - warr / 2,
-            centroid + larr / 2 + warr / 2,
+            center - larr / 2 - warr / 2,
+            center - larr / 2 + warr / 2,
+            center + larr / 2 - warr / 2,
+            center + larr / 2 + warr / 2,
         ]
-        # vertices = np.add(vertices, [position, 0, 0])
+        vertices = np.add(vertices, [position, 0, 0])
         faces = np.array([[0, 1, 2], [1, 2, 3]])
         self.walls.append(
             Wall(
