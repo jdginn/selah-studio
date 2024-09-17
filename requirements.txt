@@ -5,4 +5,4 @@ networkx
 lxml
 dataclasses_json
 pytest
-tmm
+git+https://github.com/rinaldipp/tmm.git

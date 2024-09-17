@@ -328,17 +328,17 @@ class Room:
     def volume(self) -> float:
         return self.mesh.volume
 
-    def absorption(self) -> float:
+    def absorption(self, frequency) -> float:
         absorption = 0
         for w in self.walls:
-            absorption = absorption + w.mesh.area * w.material.absorption()
+            absorption = absorption + w.mesh.area * w.material.absorption(frequency)
         return absorption
 
     def schroeder(self) -> float:
         return 2000 * (self.T60_sabine(250) / self.volume()) ** (1.0 / 2.0)
 
     def T60_sabine(self, freq: float) -> float:
-        return SABINE * self.volume() / self.absorption()
+        return SABINE * self.volume() / self.absorption(freq)
 
     def critical_distance(self):
         return 0.057 * (self.volume() / self.T60_sabine(self.schroeder())) ** 0.5
@@ -350,6 +350,7 @@ class Room:
         orig_source_pos: npt.NDArray,
         listen_pos: npt.NDArray,
         rfz_radius: float,
+        frequency: float,
         order: int = 10,
         max_time: float = 60,
         min_gain: float = -20,
@@ -403,7 +404,9 @@ class Room:
                         norm = mesh.face_normals[idx_tri[0]]
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(idx_tri[0])
-                        intensity = intensity * (1 - wall.material.absorption())
+                        intensity = intensity * (
+                            1 - wall.material.absorption(frequency)
+                        )
                         final_source = Reflection(
                             new_pos, intensity, final_source, wall
                         )
@@ -431,7 +434,9 @@ class Room:
                         norm = mesh.face_normals[tri_idx]
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(tri_idx)
-                        intensity = intensity * (1 - wall.material.absorption())
+                        intensity = intensity * (
+                            1 - wall.material.absorption(frequency)
+                        )
                         final_source = Reflection(
                             new_pos, intensity, final_source, wall
                         )
@@ -481,6 +486,8 @@ class Room:
         min_gain = kwargs.get("min_gain", -20)
         num_samples = int(kwargs.get("num_samples", 10))
         ignore_walls = kwargs.get("ignore_walls", [])
+        frequency = kwargs.get("frequency", 1000)
+        print(f"Frequency: {frequency}Hz")
         self._max_time = max_time
         self._min_gain = min_gain
 
@@ -495,6 +502,7 @@ class Room:
                 source.position,
                 listen_pos,
                 self._lt.rfz_radius,
+                frequency,
                 order,
                 max_time,
                 min_gain,

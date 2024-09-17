@@ -22,19 +22,19 @@ from selah.exceptions import SelahException
 from selah.source import SourceException, Reflection
 from selah.room import Room, CollisionException
 
-materials: typing.Dict[str, Material] = {
-    "brick": Material(0.04),
-    "glass": Material(0.00),
-    "gypsum": Material(0.05),
-    "diffuser": Material(0.999),
-    "wood": Material(0.1),
-    "12cm_rockwool": Material(0.999),
-    # "12cm_rockwool": Material(0.92),
-    "24cm_rockwool": Material(0.999),
-    # "24cm_rockwool": Material(0.94),
-    "30cm_rockwool": Material(0.999),
-    # "30cm_rockwool": Material(0.95),
-}
+# materials: typing.Dict[str, Material] = {
+#     "brick": Material(0.04),
+#     "glass": Material(0.00),
+#     "gypsum": Material(0.05),
+#     "diffuser": Material(0.999),
+#     "wood": Material(0.1),
+#     "12cm_rockwool": Material(0.999),
+#     # "12cm_rockwool": Material(0.92),
+#     "24cm_rockwool": Material(0.999),
+#     # "24cm_rockwool": Material(0.94),
+#     "30cm_rockwool": Material(0.999),
+#     # "30cm_rockwool": Material(0.95),
+# }
 
 wall_materials = {
     "default": "brick",
@@ -85,7 +85,7 @@ class parameters:
     rfz_radius: float = 0.3
     num_samples: int = 10_000
     max_time: float = 40 / 1000
-    min_gain: float = -20
+    min_gain: float = -12
     order: int = 9
 
 
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     scene = scene.scaled(1 / 1000)
     if not isinstance(scene, trimesh.Scene):
         raise RuntimeError
-    mm = MaterialManager(materials)
+    mm = MaterialManager()
     mm.set_wall_materials(wall_materials)
     blue = (128, 234, 255)
     window = ["Window A", "Window B"]
@@ -153,6 +153,7 @@ if __name__ == "__main__":
             min_gain=params.min_gain,
             order=params.order,
             ignore_walls="Floor",
+            frequency=10_000,
         )
         r_arrivals = room.trace_arrivals(
             room._lt.r_source(),
@@ -162,6 +163,7 @@ if __name__ == "__main__":
             min_gain=params.min_gain,
             order=params.order,
             ignore_walls="Floor",
+            frequency=10_000,
         )
         arrivals = l_arrivals + r_arrivals
         arrivals.sort(key=lambda a: a.total_dist)
@@ -174,6 +176,8 @@ if __name__ == "__main__":
         print(
             f"Deviation from equilateral: {abs(room._lt.listening_dist - room._lt.dist_from_center*2):.2f}m"
         )
+        print(f"Schroeder frequency: {room.schroeder():.1f}Hz")
+        print(f"Volume: {room.volume():.1f}m3")
         plt.ion()
         fig = plt.figure()
         room.plot_arrivals_interactive(fig, arrivals, False)

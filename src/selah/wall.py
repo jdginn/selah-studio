@@ -21,7 +21,7 @@ class Wall:
         self,
         name: str,
         mesh: trimesh.Trimesh,
-        material: Material = Material(0.05),
+        material: Material = Material(([1000], [0.05])),
         **kwargs,
     ):
         """Represents a wall whose shape is defined by a mesh."""
