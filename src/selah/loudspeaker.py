@@ -237,14 +237,9 @@ class Loudspeaker:
         for i, dist in enumerate(distance_to_surface):
             if dist == 0:
                 intersection = True
-                print(
-                    f"Intersection at point [{points_on_surface[i][0]}, {points_on_surface[i][1]}, {points_on_surface[i][2]}]"
-                )
         # If some of our vertices are inside and some are outside, we need to consider whether the edge between them intersects a face
         contained_points = test_mesh.contains(self.mesh.vertices)
         if any(contained_points) and not all(contained_points):
-            print("Straddles")
-            print(contained_points)
             scene = trimesh.Scene()
             scene.add_geometry(test_mesh)
             scene.add_geometry(self.mesh)
@@ -259,9 +254,6 @@ class Loudspeaker:
                                         self.mesh.vertices[index],
                                     ]
                                 )
-                            )
-                            print(
-                                f"Offending points: [{self.mesh.vertices[index][0]}, {self.mesh.vertices[index][1]}, {self.mesh.vertices[index][2]}], [{self.mesh.vertices[neighbor][0]}, {self.mesh.vertices[neighbor][1]}, {self.mesh.vertices[neighbor][2]}]"
                             )
                             intersection = True
                             return True

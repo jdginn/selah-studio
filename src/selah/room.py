@@ -235,9 +235,9 @@ class Room:
             self._mm.get_wall("left speaker wall"),
         )
         v1, v2 = (l_wall.vertices[10], l_wall.vertices[20])
-        print(
-            f"l_wall defined by: [{l_source.position[0]}, {l_source.position[1]}, {l_source.position[2]}] [{v1[0]}, {v1[1]}, {v1[2]}] [{v2[0]}, {v2[1]}, {v2[2]}]"
-        )
+        # print(
+        #     f"l_wall defined by: [{l_source.position[0]}, {l_source.position[1]}, {l_source.position[2]}] [{v1[0]}, {v1[1]}, {v1[2]}] [{v2[0]}, {v2[1]}, {v2[2]}]"
+        # )
         r_wall = build_wall_from_point(
             "right speaker wall",
             self.mesh,
@@ -260,9 +260,9 @@ class Room:
         #     raise SelahException
         r_wall.mesh = mesh
         v1, v2 = (r_wall.vertices[10], r_wall.vertices[20])
-        print(
-            f"r_wall defined by: [{r_source.position[0]}, {r_source.position[1]}, {r_source.position[2]}] [{v1[0]}, {v1[1]}, {v1[2]}] [{v2[0]}, {v2[1]}, {v2[2]}]"
-        )
+        # print(
+        #     f"r_wall defined by: [{r_source.position[0]}, {r_source.position[1]}, {r_source.position[2]}] [{v1[0]}, {v1[1]}, {v1[2]}] [{v2[0]}, {v2[1]}, {v2[2]}]"
+        # )
         if l_wall.mesh.intersection(window_box):
             l_wall.mesh = l_wall.mesh.difference(window_box)
         if r_wall.mesh.intersection(window_box):
@@ -289,7 +289,6 @@ class Room:
                 self._mm.get_wall("Ceiling Diffuser"),
             )
         )
-        pass
 
     @property
     def mesh(self) -> trimesh.Trimesh:

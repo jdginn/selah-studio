@@ -126,17 +126,13 @@ class Reflection(Source):
         while True:
             if isinstance(self.parent, Shot):
                 segment_length = float(np.linalg.norm(self.pos - self.parent.pos))
-                # print(f"Shot: segment length: {segment_length:.1f}")
                 total_dist = total_dist + float(
                     np.linalg.norm(self.pos - self.parent.pos)
                 )
-                # print(f"Running sum: {total_dist:.1f}")
                 return total_dist
             if isinstance(self.parent, Reflection):
                 segment_length = float(np.linalg.norm(self.pos - self.parent.pos))
-                # print(f"Reflection: segment length: {segment_length:.1f}")
                 total_dist = self.parent.total_dist + segment_length
-                # print(f"Running sum: {total_dist:.1f}")
                 return total_dist
             raise ReflectionException(
                 self, f"Invalid parent type for reflection: {type(self.parent)}"
