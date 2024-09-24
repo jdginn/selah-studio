@@ -16,7 +16,7 @@ import selah
 
 from selah.material import MaterialManager, Material
 from selah.sound import SPEED_OF_SOUND
-from selah.loudspeaker import LoudspeakerSpec, Loudspeaker
+from selah.loudspeaker import Directivity, LoudspeakerSpec, SourceGenerator
 from selah.wall import Wall
 from selah.exceptions import SelahException
 from selah.source import SourceException, Reflection
@@ -50,7 +50,7 @@ wall_materials = {
     "Street C": "24cm_rockwool",
     "Street D": "24cm_rockwool",
     "Street E": "24cm_rockwool",
-    # "Hall A": "24cm_rockwool",
+    "Hall A": "24cm_rockwool",
     "Hall B": "24cm_rockwool",
     "Hall E": "24cm_rockwool",
     "Entry Back": "24cm_rockwool",
@@ -58,16 +58,29 @@ wall_materials = {
     "Cutout Top": "24cm_rockwool",
     "Window A": "glass",
     "Window B": "glass",
-    "Door": "12cm_rockwool",
+    # "Door": "12cm_rockwool",
     "left speaker wall": "gypsum",
     "right speaker wall": "gypsum",
 }
 
+kh310_horiz_disp: dict[float, float] = {0: 0, 30: 0, 50: -3, 70: -6, 80: -9, 90: -20}
+kh310_vert_disp: dict[float, float] = {0: 0, 30: -3, 60: -6, 90: -9, 100: -30}
+
 mum8 = LoudspeakerSpec(
-    x_dim=0.38, y_dim=0.256, z_dim=0.52, y_offset=0.096, z_offset=0.412
+    x_dim=0.38,
+    y_dim=0.256,
+    z_dim=0.52,
+    y_offset=0.096,
+    z_offset=0.412,
+    directivity=Directivity(kh310_horiz_disp, kh310_vert_disp),
 )
 mum8_swap = LoudspeakerSpec(
-    x_dim=0.38, y_dim=0.256, z_dim=0.52, y_offset=(0.256 - 0.096), z_offset=0.412
+    x_dim=0.38,
+    y_dim=0.256,
+    z_dim=0.52,
+    y_offset=(0.256 - 0.096),
+    z_offset=0.412,
+    directivity=Directivity(kh310_horiz_disp, kh310_vert_disp),
 )
 
 
@@ -80,21 +93,24 @@ class parameters:
     # filename: str = "examples/resources/studio.3mf"
     filename: str = "Cutout.3mf"
     height: float = 1.4
-    speaker_height: float = 1.9
-    dist_from_wall: float = 0.47
-    dist_from_center: float = 1.1
-    deviation_from_equilateral: float = 0.3
+    # speaker_height: float = 1.9
+    speaker_height: float = 2.0
+    dist_from_wall: float = 0.49
+    # dist_from_center: float = 1.1
+    dist_from_center: float = 1.0
+    # deviation_from_equilateral: float = 0.3
+    deviation_from_equilateral: float = 0
     max_listen_pos: float = 2.7
     min_listen_pos: float = 1.3
-    ceiling_diffuser_height: float = 2.3
+    ceiling_diffuser_height: float = 2.6
     ceiling_diffuser_length: float = 2.5
-    ceiling_diffuser_width: float = 5.0
+    ceiling_diffuser_width: float = 3.0
     ceiling_diffuser_position: float = 0.75
-    rfz_radius: float = 0.3
-    num_samples: int = 10_000
+    rfz_radius: float = 0.4
+    num_samples: int = 5_000
     max_time: float = 40 / 1000
     min_gain: float = -20
-    order: int = 9
+    order: int = 15
 
 
 if __name__ == "__main__":
@@ -128,15 +144,6 @@ if __name__ == "__main__":
             dist_from_center=params.dist_from_center,
             deviation=params.deviation_from_equilateral,
             source=mum8_swap,
-            # source=LoudspeakerSpec(
-            #     x_dim=0.380,
-            #     y_dim=0.256,
-            #     z_dim=0.529,
-            #     y_offset=0.150,
-            #     z_offset=0.235,
-            #     vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
-            #     horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
-            # ),
             rfz_radius=params.rfz_radius,
         )
     except CollisionException as ex:
@@ -154,15 +161,26 @@ if __name__ == "__main__":
         params.ceiling_diffuser_position,
     )
     try:
-        self_arrivals = room.trace_arrivals(
-            room._lt.l_source(),
-            room._lt.listening_pos(),
-            num_samples=params.num_samples,
-            max_time=params.max_time,
-            min_gain=params.min_gain,
-            order=params.order,
-            ignore_walls="Floor",
-        )
+        # self_arrivals = room.trace_arrivals(
+        #     SourceGenerator(
+        #         room._lt.listening_pos(),
+        #         [-1, 0, 0],
+        #         Directivity(
+        #             horiz_disp={0: 0, 90: -3, 180: -6},
+        #             vert_disp={0: 0, 90: -3, 180: -6},
+        #         ),
+        #     ),
+        #     room._lt.listening_pos(),
+        #     num_samples=params.num_samples,
+        #     max_time=params.max_time,
+        #     min_gain=-20,
+        #     order=params.order,
+        #     dispersion_range=180,
+        # )
+        # plt.ion()
+        # fig = plt.figure()
+        # room.plot_arrivals_interactive(fig, self_arrivals, False)
+        # plt.show(block=True)
         l_arrivals = room.trace_arrivals(
             room._lt.l_source(),
             room._lt.listening_pos(),
@@ -189,9 +207,10 @@ if __name__ == "__main__":
         print(f"ITD: {ITD:.1f}ms")
         print(f"Critical distance: {room.critical_distance():.2f}m")
         print(f"Listening distance: {room._lt.listening_dist:.2f}m")
-        print(
-            f"Deviation from equilateral: {abs(room._lt.listening_dist - room._lt.dist_from_center*2):.2f}m"
-        )
+        # print(
+        #     f"Deviation from equilateral: {abs(room._lt.listening_dist - room._lt.dist_from_center*2):.2f}m"
+        # )
+        print(f"Dist from back wall: {3.6 - room._lt.listening_pos()[0]:.2f}m")
         plt.ion()
         fig = plt.figure()
         room.plot_arrivals_interactive(fig, arrivals, False)

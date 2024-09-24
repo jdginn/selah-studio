@@ -143,7 +143,6 @@ def optimize_to_target(target, scale, x, is_abs=True) -> float:
 def fitness_func(ga_instance, solution, solution_idx):
     genetic_params = training_parameters(*solution)
     fixed_params = global_params
-    print(f"{global_speaker._y_offset}, {global_speaker._z_offset}")
     dev_fom = optimize_to_target(0, 1, abs(genetic_params.deviation_from_equilateral))
     height_fom = optimize_to_target(
         2.75, 1, abs(genetic_params.ceiling_diffuser_height)
