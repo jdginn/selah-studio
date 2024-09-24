@@ -15,7 +15,7 @@ from trimesh.path import Path2D
 from . import geometry
 from .exceptions import SelahException
 from .material import MaterialManager, Material
-from .loudspeaker import Loudspeaker, LoudspeakerSpec
+from .loudspeaker import Loudspeaker, LoudspeakerSpec, Side
 from .sound import db, from_db, SPEED_OF_SOUND, SABINE
 from .source import Source, Shot, Reflection, ReflectionException, ShotException
 from .wall import Axis, Wall, build_wall_from_point
@@ -104,6 +104,7 @@ class ListeningTriangle:
             self.source_spec,
             speaker_pos,
             geometry.dir_from_points(speaker_pos, self.listening_pos()),
+            side=Side.LEFT,
         )
 
     def r_source(self) -> Loudspeaker:
@@ -127,6 +128,7 @@ class ListeningTriangle:
             self.source_spec,
             speaker_pos,
             geometry.dir_from_points(speaker_pos, self.listening_pos()),
+            side=Side.RIGHT,
         )
 
     # Value from Rod Gervais' book Home Recording Studio: Build It Like The Pros
@@ -392,7 +394,6 @@ class Room:
                         )
                 # This ray has exactly one intersection
                 case 1:
-                    print("Micsoda?")
                     if np.linalg.norm(source_pos - loc[0]) > 0:
                         new_pos = loc[0]
                         if mesh.face_normals is None:

@@ -1,5 +1,6 @@
 import math
 import typing
+from enum import Enum
 
 import numpy as np
 import numpy.typing as npt
@@ -23,11 +24,11 @@ class LoudspeakerSpec:
     # Takes arguments mapping degrees to gain in dB
     def __init__(
         self,
-        x_dim: float = 0.380,
-        y_dim: float = 0.256,
-        z_dim: float = 0.520,
-        y_offset: float = 0.128,
-        z_offset: float = 0.128,
+        x_dim: float,
+        y_dim: float,
+        z_dim: float,
+        y_offset: float,
+        z_offset: float,
         horiz_disp: dict[float, float] = {0: 0, 30: 0, 60: -12, 70: -100},
         vert_disp: dict[float, float] = {0: 0, 30: -9, 60: -15, 70: -19, 80: -30},
         x_margin: float = 0.05,
@@ -35,7 +36,8 @@ class LoudspeakerSpec:
         z_margin: float = 0.05,
     ):
         """
-        LouspeakerSpec represents a certain kind of directional louspeaker.
+        LouspeakerSpec represents a the left speaker for a certain kind of directional louspeaker.
+        The right speaker will be produced by flipping the y-plane around the z-axis.
 
         Speaker dimensions assume the drivers are on the plane of X=0.
 
@@ -83,6 +85,11 @@ class LoudspeakerSpec:
         return val
 
 
+class Side(Enum):
+    LEFT = 0
+    RIGHT = 1
+
+
 class Loudspeaker:
     # Reference normal against which all new normals are referenced
     ref_vec = np.array([-1, 0, 0])
@@ -92,6 +99,7 @@ class Loudspeaker:
         spec: LoudspeakerSpec,
         position: typing.Union[npt.NDArray, list[float]] = np.array([0, 0, 0]),
         normal: typing.Union[npt.NDArray, list[float]] = np.array([-1, 0, 0]),
+        side: Side = Side.LEFT,
     ):
         """
         Loudspeaker represents a specific louspeaker at a specific location in space.
@@ -106,6 +114,7 @@ class Loudspeaker:
             Normal vector from acoustic axis
         """
         self.spec = spec
+        self._side = side
         if isinstance(position, list):
             position = np.array(position)
         self.position = position
@@ -124,12 +133,25 @@ class Loudspeaker:
             extents = np.array([self.spec._x_dim, self.spec._y_dim, self.spec._z_dim])
             mesh = trimesh.primitives.Box(np.array(extents))
 
-            mesh.apply_translation(
-                # normalize so bottom left corner is at [0, 0, 0]
-                np.array([-extents[0], extents[1], extents[2]]) / 2
-                # normalize so acoustic center is at [0, 0, 0]
-                - [0, self.spec._y_offset, self.spec._z_offset]
-            )
+            match self._side:
+                case Side.LEFT:
+                    mesh.apply_translation(
+                        # normalize so bottom left corner is at [0, 0, 0]
+                        np.array([-extents[0], extents[1], extents[2]]) / 2
+                        # normalize so acoustic center is at [0, 0, 0]
+                        - [0, self.spec._y_offset, self.spec._z_offset]
+                    )
+                case Side.RIGHT:
+                    mesh.apply_translation(
+                        # normalize so bottom left corner is at [0, 0, 0]
+                        np.array([-extents[0], extents[1], extents[2]]) / 2
+                        # normalize so acoustic center is at [0, 0, 0]
+                        - [
+                            0,
+                            (self.spec._y_dim - self.spec._y_offset),
+                            self.spec._z_offset,
+                        ]
+                    )
             ref_vec = -self.ref_vec
             angle = trimesh.transformations.angle_between_vectors(
                 ref_vec, self.normal, True

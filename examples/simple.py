@@ -43,24 +43,32 @@ wall_materials = {
     "Front B": "gypsum",
     "Back Diffuser": "diffuser",
     "Ceiling Diffuser": "diffuser",
-    "Back A": "24cm_rockwool",
-    "Back B": "24cm_rockwool",
+    # "Back A": "24cm_rockwool",
+    # "Back B": "24cm_rockwool",
     "Street A": "24cm_rockwool",
     "Street B": "24cm_rockwool",
     "Street C": "24cm_rockwool",
     "Street D": "24cm_rockwool",
     "Street E": "24cm_rockwool",
-    "Hall A": "24cm_rockwool",
+    # "Hall A": "24cm_rockwool",
     "Hall B": "24cm_rockwool",
     "Hall E": "24cm_rockwool",
     "Entry Back": "24cm_rockwool",
     "Entry Front": "24cm_rockwool",
+    "Cutout Top": "24cm_rockwool",
     "Window A": "glass",
     "Window B": "glass",
     "Door": "12cm_rockwool",
     "left speaker wall": "gypsum",
     "right speaker wall": "gypsum",
 }
+
+mum8 = LoudspeakerSpec(
+    x_dim=0.38, y_dim=0.256, z_dim=0.52, y_offset=0.096, z_offset=0.412
+)
+mum8_swap = LoudspeakerSpec(
+    x_dim=0.38, y_dim=0.256, z_dim=0.52, y_offset=(0.256 - 0.096), z_offset=0.412
+)
 
 
 class ListeningPositionError(SelahException):
@@ -70,10 +78,10 @@ class ListeningPositionError(SelahException):
 @dataclass
 class parameters:
     # filename: str = "examples/resources/studio.3mf"
-    filename: str = "WIP.3mf"
+    filename: str = "Cutout.3mf"
     height: float = 1.4
     speaker_height: float = 1.9
-    dist_from_wall: float = 0.45
+    dist_from_wall: float = 0.47
     dist_from_center: float = 1.1
     deviation_from_equilateral: float = 0.3
     max_listen_pos: float = 2.7
@@ -119,15 +127,16 @@ if __name__ == "__main__":
             dist_from_wall=params.dist_from_wall,
             dist_from_center=params.dist_from_center,
             deviation=params.deviation_from_equilateral,
-            source=LoudspeakerSpec(
-                x_dim=0.380,
-                y_dim=0.256,
-                z_dim=0.529,
-                y_offset=0.150,
-                z_offset=0.235,
-                vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
-                horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
-            ),
+            source=mum8_swap,
+            # source=LoudspeakerSpec(
+            #     x_dim=0.380,
+            #     y_dim=0.256,
+            #     z_dim=0.529,
+            #     y_offset=0.150,
+            #     z_offset=0.235,
+            #     vert_disp={0: 0, 25: -5, 60: -6, 80: -12, 90: -100},
+            #     horiz_disp={0: 0, 30: -3, 50: -6, 60: -9, 90: -100},
+            # ),
             rfz_radius=params.rfz_radius,
         )
     except CollisionException as ex:
@@ -145,6 +154,15 @@ if __name__ == "__main__":
         params.ceiling_diffuser_position,
     )
     try:
+        self_arrivals = room.trace_arrivals(
+            room._lt.l_source(),
+            room._lt.listening_pos(),
+            num_samples=params.num_samples,
+            max_time=params.max_time,
+            min_gain=params.min_gain,
+            order=params.order,
+            ignore_walls="Floor",
+        )
         l_arrivals = room.trace_arrivals(
             room._lt.l_source(),
             room._lt.listening_pos(),
