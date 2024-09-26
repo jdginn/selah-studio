@@ -180,7 +180,7 @@ def fitness_func(ga_instance, solution, solution_idx):
             dist_from_wall=genetic_params.dist_from_wall,
             dist_from_center=genetic_params.dist_from_center,
             deviation=genetic_params.deviation_from_equilateral,
-            source=global_speaker,
+            source_spec=global_speaker,
             rfz_radius=fixed_params.rfz_radius,
         )
     except CollisionException:
@@ -294,7 +294,7 @@ def get_arrivals(solution) -> typing.Tuple[Room, typing.List[Source]]:
         dist_from_wall=genetic_params.dist_from_wall,
         dist_from_center=genetic_params.dist_from_center,
         deviation=genetic_params.deviation_from_equilateral,
-        source=global_speaker,
+        source_spec=global_speaker,
         rfz_radius=fixed_params.rfz_radius,
     )
     room.ceiling_absorber(
