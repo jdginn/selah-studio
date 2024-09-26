@@ -55,7 +55,6 @@ class ListeningTriangle:
         height: float,
         dist_from_wall: float,
         dist_from_center: float,
-        source_spec: LoudspeakerSpec,
         rfz_radius: float,
         **kwargs,
     ) -> None:
@@ -64,7 +63,6 @@ class ListeningTriangle:
         self.speaker_height = kwargs.get("speaker_height", height)
         self.dist_from_wall = dist_from_wall
         self.dist_from_center = dist_from_center
-        self.source_spec = source_spec
         self.rfz_radius = rfz_radius
         self._deviation = kwargs.get("deviation", 0)
 
@@ -83,7 +81,8 @@ class ListeningTriangle:
     def y_center(self) -> float:
         return self._wall.center_pos()[1]
 
-    def l_source(self) -> Loudspeaker:
+    @property
+    def l_source(self) -> npt.NDArray:
         """Returns the position of the left stereo source"""
         p = self._wall.center_pos()
         match self._axis:
@@ -100,14 +99,10 @@ class ListeningTriangle:
                 raise RuntimeError
             case Axis.Z:
                 raise RuntimeError
-        return Loudspeaker(
-            self.source_spec,
-            speaker_pos,
-            geometry.dir_from_points(speaker_pos, self.listening_pos()),
-            side=Side.LEFT,
-        )
+        return speaker_pos
 
-    def r_source(self) -> Loudspeaker:
+    @property
+    def r_source(self) -> npt.NDArray:
         """Returns the position of the right stereo source"""
         p = self._wall.center_pos()
         match self._axis:
@@ -124,6 +119,7 @@ class ListeningTriangle:
                 raise RuntimeError
             case Axis.Z:
                 raise RuntimeError
+        return speaker_pos
         return Loudspeaker(
             self.source_spec,
             speaker_pos,
@@ -134,6 +130,7 @@ class ListeningTriangle:
     # Value from Rod Gervais' book Home Recording Studio: Build It Like The Pros
     LISTENER_DIST_INTO_TRIANGLE = 0.38
 
+    @property
     def listening_pos(self) -> npt.NDArray:
         """Returns the position of the listener's head"""
         p = self._wall.center_pos()
@@ -160,7 +157,7 @@ class ListeningTriangle:
 
     @property
     def listening_dist(self) -> float:
-        return float(np.linalg.norm(self.l_source().position - self.listening_pos()))
+        return float(np.linalg.norm(self.l_source - self.listening_pos))
 
 
 class Room:
@@ -184,7 +181,7 @@ class Room:
         height: float,
         dist_from_wall: float,
         dist_from_center: float,
-        source: LoudspeakerSpec,
+        source_spec: LoudspeakerSpec,
         rfz_radius: float,
         **kwargs,
     ) -> None:
@@ -198,15 +195,25 @@ class Room:
             height,
             dist_from_wall,
             dist_from_center,
-            source,
             rfz_radius,
             **kwargs,
         )
-        l_source = self._lt.l_source()
-        r_source = self._lt.r_source()
-
+        l_source = Loudspeaker(
+            source_spec,
+            self._lt.l_source,
+            geometry.dir_from_points(self._lt.l_source, self._lt.listening_pos),
+            side=Side.LEFT,
+        )
+        self._l_source = l_source
         if l_source.test_intersection(self.mesh):
             raise CollisionException([self.mesh, l_source.mesh])
+        r_source = Loudspeaker(
+            source_spec,
+            self._lt.r_source,
+            geometry.dir_from_points(self._lt.r_source, self._lt.listening_pos),
+            side=Side.RIGHT,
+        )
+        self._r_source = r_source
         if r_source.test_intersection(self.mesh):
             raise CollisionException([self.mesh, r_source.mesh])
 
@@ -356,9 +363,13 @@ class Room:
         min_gain: float = -20,
         ignore_walls: typing.List[str] = [],
     ) -> typing.Tuple[Source, bool]:
+        if shot.gain < min_gain:
+            return shot, False
+
         source_pos = orig_source_pos
-        final_source: Source = shot
-        intensity = from_db(shot.gain)
+        final_source: Reflection = shot
+        intensity = shot.gain
+        print(f"Shot intensity: {db(shot.gain):.1f}")
         wall: Wall
 
         # First, check whether this ray intersects the rfz. If so, return.
@@ -404,6 +415,10 @@ class Room:
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(idx_tri[0])
                         intensity = intensity * (1 - wall.material.absorption())
+                        # if db(intensity) > shot.gain:
+                        #     import IPython
+                        #
+                        #     IPython.embed()
                         final_source = Reflection(
                             new_pos, intensity, final_source, wall
                         )
@@ -432,6 +447,10 @@ class Room:
                         dir = dir - norm * 2 * dir.dot(norm)
                         wall = self.faces_to_wall(tri_idx)
                         intensity = intensity * (1 - wall.material.absorption())
+                        # if db(intensity) > shot.gain:
+                        #     import IPython
+                        #
+                        #     IPython.embed()
                         final_source = Reflection(
                             new_pos, intensity, final_source, wall
                         )
@@ -446,11 +465,9 @@ class Room:
 
             # Check whether this reflection passes within the RFZ
             dist_from_crit = geometry.lineseg_dist(new_pos, source_pos, listen_pos)
+            print(f"    Next intensity: {db(final_source.gain):.1f}")
 
             source_pos = new_pos
-            # Only check out to some minimum gain
-            if db(intensity) < min_gain:
-                break
             if isinstance(final_source, Reflection):
                 # Only check out to some number of ms
                 if final_source.total_dist / SPEED_OF_SOUND > max_time:
@@ -459,6 +476,9 @@ class Room:
                 if isinstance(prev_source, Reflection):
                     if prev_source.wall.name in ignore_walls:
                         continue
+            # Only check out to some minimum gain
+            if db(final_source.parent.gain) < min_gain:
+                break
             if dist_from_crit < rfz_radius and i > 0:
                 # We only care about rays that reflect to the RFZ
                 return final_source, True
@@ -512,25 +532,30 @@ class Room:
         Plots a 2-dimensional representation of the room as viewed from above.
         """
         plt.scatter(
-            self._lt.l_source().position[0],
-            self._lt.l_source().position[1],
+            self._lt.l_source[0],
+            self._lt.l_source[1],
             marker="x",
             linewidth=8,
         )
         plt.scatter(
-            self._lt.r_source().position[0],
-            self._lt.r_source().position[1],
+            self._lt.r_source[0],
+            self._lt.r_source[1],
             marker="x",
             linewidth=8,
         )
         circle = patches.Circle(
-            (self._lt.listening_pos()[0], self._lt.listening_pos()[1]),
+            (self._lt.listening_pos[0], self._lt.listening_pos[1]),
             self._lt.rfz_radius,
             fill=False,
             color="dimgrey",
         )
         plt.gca().add_patch(circle)
         plt.draw()
+        w = self.get_wall("ABS")
+        plt.scatter(w.mesh.vertices[0][0], w.mesh.vertices[0][1])
+        plt.scatter(w.mesh.vertices[1][0], w.mesh.vertices[1][1])
+        plt.scatter(w.mesh.vertices[2][0], w.mesh.vertices[2][1])
+        plt.scatter(w.mesh.vertices[3][0], w.mesh.vertices[3][1])
 
         # sec = self.mesh.section((0, 0, 1), (0, 0, self._lt.speaker_height))
         sec = self.mesh.section((0, 0, 1), (0, 0, 0))
@@ -545,19 +570,19 @@ class Room:
         Plots a 2-dimensional representation of the room as viewed from the side.
         """
         plt.scatter(
-            self._lt.l_source().position[0],
-            self._lt.l_source().position[2],
+            self._lt.l_source[0],
+            self._lt.l_source[2],
             marker="x",
             linewidth=8,
         )
         plt.scatter(
-            self._lt.r_source().position[0],
-            self._lt.r_source().position[2],
+            self._lt.r_source[0],
+            self._lt.r_source[2],
             marker="x",
             linewidth=8,
         )
         circle = patches.Circle(
-            (self._lt.listening_pos()[0], self._lt.listening_pos()[2]),
+            (self._lt.listening_pos[0], self._lt.listening_pos[2]),
             self._lt.rfz_radius,
             fill=False,
             color="dimgrey",
@@ -577,7 +602,7 @@ class Room:
     def plot_arrivals(
         self,
         fig,
-        arrivals: typing.List[Source],
+        arrivals: typing.List[Reflection],
         manually_advance=False,
     ):
         """
@@ -598,7 +623,7 @@ class Room:
             color = colors[i % len(colors)]
             ax3.bar(
                 (a.total_dist - self._lt.listening_dist) / SPEED_OF_SOUND * 1000,
-                bottom=db(a.gain),
+                bottom=db(a.parent.gain),
                 height=self._min_gain,
                 color=a.color(color),
                 picker=True,
@@ -616,7 +641,7 @@ class Room:
                         [h.pos[1], h.parent.pos[1]],
                         marker="o",
                         color=h.color(color),
-                        linewidth=4 * h.gain,
+                        linewidth=4 * h.parent.gain,
                     )
                     ax2.scatter(h.pos[0], h.pos[2])
                     ax2.plot(
@@ -624,7 +649,7 @@ class Room:
                         [h.pos[2], h.parent.pos[2]],
                         marker="o",
                         color=h.color(color),
-                        linewidth=4 * h.gain,
+                        linewidth=4 * h.parent.gain,
                     )
                     h = h.parent
             plt.draw()
@@ -695,18 +720,18 @@ class Room:
         #         )
         #     # w.mesh.visual = tv.ColorVisuals(w.mesh, tv.random_color())
         #     scene.add_geometry(w.mesh)
-        scene.add_geometry(self._lt.l_source().mesh)
-        scene.add_geometry(self._lt.r_source().mesh)
-        lpos = trimesh.primitives.Sphere(radius=0.1, center=self._lt.listening_pos())
+        scene.add_geometry(self._l_source.mesh)
+        scene.add_geometry(self._r_source.mesh)
+        lpos = trimesh.primitives.Sphere(radius=0.1, center=self._lt.listening_pos)
         lpos.visual.vertex_colors = tv.random_color()  # pyright: ignore
         scene.add_geometry(
             trimesh.load_path(
-                [self._lt.l_source().position, self._lt.listening_pos()],
+                [self._lt.l_source, self._lt.listening_pos],
             )
         )
         scene.add_geometry(
             trimesh.load_path(
-                [self._lt.r_source().position, self._lt.listening_pos()],
+                [self._lt.r_source, self._lt.listening_pos],
             )
         )
         # scene.add_geometry(
@@ -720,11 +745,11 @@ class Room:
         scene.add_geometry(
             trimesh.load_path(
                 [
-                    self._lt.r_source().position,
-                    self._lt.r_source().position
+                    self._lt.r_source,
+                    self._lt.r_source
                     + (
-                        self._lt.r_source().mesh.vertices[4]
-                        - self._lt.r_source().mesh.vertices[0]
+                        self._r_source.mesh.vertices[4]
+                        - self._r_source.mesh.vertices[0]
                     )
                     * 10,
                 ],
@@ -733,8 +758,8 @@ class Room:
         scene.add_geometry(
             trimesh.load_path(
                 [
-                    self._lt.l_source().position,
-                    self._lt.l_source().position + self._lt.l_source().normal * 10,
+                    self._l_source.position,
+                    self._l_source.position + self._l_source.normal * 10,
                 ],
             )
         )
