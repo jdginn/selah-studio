@@ -42,7 +42,7 @@ wall_materials = {
     "Front A": "gypsum",
     "Front B": "gypsum",
     "Back Diffuser": "diffuser",
-    "Ceiling Diffuser": "diffuser",
+    "Ceiling Diffuser": "24cm_rockwool",
     # "Back A": "24cm_rockwool",
     # "Back B": "24cm_rockwool",
     "Street A": "24cm_rockwool",
@@ -102,10 +102,11 @@ class parameters:
     deviation_from_equilateral: float = 0
     max_listen_pos: float = 2.7
     min_listen_pos: float = 1.3
-    ceiling_diffuser_height: float = 2.6
+    ceiling_diffuser_height: float = 2.5
     ceiling_diffuser_length: float = 2.5
     ceiling_diffuser_width: float = 3.0
-    ceiling_diffuser_position: float = 0.75
+    # ceiling_diffuser_position: float = 0.75
+    ceiling_diffuser_position: float = 0
     rfz_radius: float = 0.4
     num_samples: int = 5_000
     max_time: float = 40 / 1000
@@ -143,13 +144,13 @@ if __name__ == "__main__":
             dist_from_wall=params.dist_from_wall,
             dist_from_center=params.dist_from_center,
             deviation=params.deviation_from_equilateral,
-            source=mum8_swap,
+            source_spec=mum8_swap,
             rfz_radius=params.rfz_radius,
         )
     except CollisionException as ex:
         print(f"Exception: {type(ex)}")
         room.show()
-    listen_pos = room._lt.listening_pos()
+    listen_pos = room._lt.listening_pos
     if listen_pos[0] <= params.min_listen_pos:
         raise ListeningPositionError("Too close to front wall")
     if listen_pos[0] >= params.max_listen_pos:
@@ -182,8 +183,8 @@ if __name__ == "__main__":
         # room.plot_arrivals_interactive(fig, self_arrivals, False)
         # plt.show(block=True)
         l_arrivals = room.trace_arrivals(
-            room._lt.l_source(),
-            room._lt.listening_pos(),
+            room._l_source,
+            room._lt.listening_pos,
             num_samples=params.num_samples,
             max_time=params.max_time,
             min_gain=params.min_gain,
@@ -191,8 +192,8 @@ if __name__ == "__main__":
             ignore_walls="Floor",
         )
         r_arrivals = room.trace_arrivals(
-            room._lt.r_source(),
-            room._lt.listening_pos(),
+            room._r_source,
+            room._lt.listening_pos,
             num_samples=params.num_samples,
             max_time=params.max_time,
             min_gain=params.min_gain,
@@ -210,7 +211,7 @@ if __name__ == "__main__":
         # print(
         #     f"Deviation from equilateral: {abs(room._lt.listening_dist - room._lt.dist_from_center*2):.2f}m"
         # )
-        print(f"Dist from back wall: {3.6 - room._lt.listening_pos()[0]:.2f}m")
+        print(f"Dist from back wall: {3.6 - room._lt.listening_pos[0]:.2f}m")
         plt.ion()
         fig = plt.figure()
         room.plot_arrivals_interactive(fig, arrivals, False)
