@@ -19,7 +19,7 @@ from selah.material import MaterialManager, Material
 from selah.wall import Wall
 from selah.source import Source
 from selah.exceptions import SelahException
-from selah.loudspeaker import LoudspeakerSpec
+from selah.loudspeaker import Directivity, LoudspeakerSpec
 from selah.sound import SPEED_OF_SOUND
 
 materials: typing.Dict[str, Material] = {
@@ -62,22 +62,48 @@ wall_materials = {
     "left speaker wall": "gypsum",
     "right speaker wall": "gypsum",
 }
+kh310_horiz_disp: dict[float, float] = {0: 0, 30: 0, 50: -3, 70: -6, 80: -9, 90: -20}
+kh310_vert_disp: dict[float, float] = {0: 0, 30: -3, 60: -6, 90: -9, 100: -30}
 
 mum8 = LoudspeakerSpec(
-    x_dim=0.38, y_dim=0.256, z_dim=0.52, y_offset=0.096, z_offset=0.412
+    x_dim=0.38,
+    y_dim=0.256,
+    z_dim=0.52,
+    y_offset=0.096,
+    z_offset=0.412,
+    directivity=Directivity(kh310_horiz_disp, kh310_vert_disp),
 )
 mum8_swap = LoudspeakerSpec(
-    x_dim=0.38, y_dim=0.256, z_dim=0.52, y_offset=(0.256 - 0.096), z_offset=0.412
+    x_dim=0.38,
+    y_dim=0.52,
+    z_dim=0.256,
+    y_offset=0.195,
+    z_offset=0.128,
+    directivity=Directivity(kh310_horiz_disp, kh310_vert_disp),
 )
 mum8_horiz = LoudspeakerSpec(
-    x_dim=0.38, y_dim=0.52, z_dim=0.256, y_offset=0.195, z_offset=0.128
+    x_dim=0.38,
+    y_dim=0.52,
+    z_dim=0.256,
+    y_offset=0.195,
+    z_offset=0.128,
+    directivity=Directivity(kh310_horiz_disp, kh310_vert_disp),
 )
-
 mum8_horiz_swap = LoudspeakerSpec(
-    x_dim=0.38, y_dim=0.52, z_dim=0.256, y_offset=(0.52 - 0.195), z_offset=0.128
+    x_dim=0.38,
+    y_dim=0.52,
+    z_dim=0.256,
+    y_offset=(0.52 - 0.195),
+    z_offset=0.128,
+    directivity=Directivity(kh310_horiz_disp, kh310_vert_disp),
 )
 mum8_upside_down = LoudspeakerSpec(
-    x_dim=0.38, y_dim=0.256, z_dim=0.52, y_offset=0.096, z_offset=(0.52 - 0.412)
+    x_dim=0.38,
+    y_dim=0.256,
+    z_dim=0.52,
+    y_offset=0.096,
+    z_offset=(0.52 - 0.412),
+    directivity=Directivity(kh310_horiz_disp, kh310_vert_disp),
 )
 mum8_upside_down_swap = LoudspeakerSpec(
     x_dim=0.38,
@@ -85,6 +111,7 @@ mum8_upside_down_swap = LoudspeakerSpec(
     z_dim=0.52,
     y_offset=(0.256 - 0.096),
     z_offset=(0.52 - 0.412),
+    directivity=Directivity(kh310_horiz_disp, kh310_vert_disp),
 )
 
 
@@ -98,7 +125,7 @@ class fixed_parameters:
     # filename: str = "WIP.3mf"
     filename: str = "Cutout.3mf"
     rfz_radius: float = 0.3
-    num_samples: int = 1_000
+    num_samples: int = 2_000
     max_time: float = 35 / 1000
     min_gain: float = -10
     order: int = 10
@@ -197,7 +224,7 @@ def fitness_func(ga_instance, solution, solution_idx):
         + room.get_wall("left speaker wall").mesh.area
     )
     area_fom = optimize_to_target(5, 2, wall_area, False)
-    listen_pos = room._lt.listening_pos()
+    listen_pos = room._lt.listening_pos
     if listen_pos[0] <= fixed_params.min_listen_pos:
         valid = False
     if listen_pos[0] >= fixed_params.max_listen_pos:
@@ -210,8 +237,8 @@ def fitness_func(ga_instance, solution, solution_idx):
     )
     try:
         l_arrivals = room.trace_arrivals(
-            room._lt.l_source(),
-            room._lt.listening_pos(),
+            room._l_source,
+            room._lt.listening_pos,
             num_samples=fixed_params.num_samples,
             max_time=fixed_params.max_time,
             min_gain=fixed_params.min_gain,
@@ -219,15 +246,16 @@ def fitness_func(ga_instance, solution, solution_idx):
             ignore_walls="Floor",
         )
         r_arrivals = room.trace_arrivals(
-            room._lt.r_source(),
-            room._lt.listening_pos(),
+            room._r_source,
+            room._lt.listening_pos,
             num_samples=fixed_params.num_samples,
             max_time=fixed_params.max_time,
             min_gain=fixed_params.min_gain,
             order=fixed_params.order,
             ignore_walls="Floor",
         )
-    except:
+    except SelahException as ex:
+        print(f"Arrival tracing exception: {ex.message}")
         return [
             0,
             -abs(genetic_params.deviation_from_equilateral),
@@ -239,6 +267,7 @@ def fitness_func(ga_instance, solution, solution_idx):
     arrivals = l_arrivals + r_arrivals
     arrivals.sort(key=lambda a: a.total_dist)
     if len(arrivals) == 0:
+        print("No arrivals")
         return [
             0,
             -abs(genetic_params.deviation_from_equilateral),
@@ -304,8 +333,8 @@ def get_arrivals(solution) -> typing.Tuple[Room, typing.List[Source]]:
         genetic_params.ceiling_diffuser_position,
     )
     l_arrivals = room.trace_arrivals(
-        room._lt.l_source(),
-        room._lt.listening_pos(),
+        room._l_source,
+        room._lt.listening_pos,
         num_samples=fixed_params.num_samples,
         max_time=fixed_params.max_time,
         min_gain=fixed_params.min_gain,
@@ -313,8 +342,8 @@ def get_arrivals(solution) -> typing.Tuple[Room, typing.List[Source]]:
         ignore_walls="Floor",
     )
     r_arrivals = room.trace_arrivals(
-        room._lt.r_source(),
-        room._lt.listening_pos(),
+        room._r_source,
+        room._lt.listening_pos,
         num_samples=fixed_params.num_samples,
         max_time=fixed_params.max_time,
         min_gain=fixed_params.min_gain,
@@ -347,7 +376,7 @@ if __name__ == "__main__":
     }
     for k, speaker in speakers.items():
         ga_instance = pygad.GA(
-            num_generations=1,
+            num_generations=4,
             num_parents_mating=16,
             fitness_func=fitness_func,
             sol_per_pop=24,
@@ -365,9 +394,11 @@ if __name__ == "__main__":
         )
         ga_instance.run()
 
-        # solution, solution_fitness, solution_idx = ga_instance.best_solution()
-        # pprint.pprint(f"Parameters of the best solution : {training_parameters(*solution)}")
-        # pprint.pprint(f"Fitness value of the best solution = {solution_fitness}")
+        solution, solution_fitness, solution_idx = ga_instance.best_solution()
+        pprint.pprint(
+            f"Parameters of the best solution : {training_parameters(*solution)}"
+        )
+        pprint.pprint(f"Fitness value of the best solution = {solution_fitness}")
         # ga_instance.plot_fitness(
         #     label=[
         #         "ITD",
@@ -380,6 +411,9 @@ if __name__ == "__main__":
         # )
 
         ga_instance.save(k)
+    # import IPython
+    #
+    # IPython.embed()
 
     # solutions = ga_instance.solutions_fitness
     # solutions = [x for x in solutions if x[5]]

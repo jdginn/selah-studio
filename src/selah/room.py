@@ -369,7 +369,7 @@ class Room:
         source_pos = orig_source_pos
         final_source: Reflection = shot
         intensity = shot.gain
-        print(f"Shot intensity: {db(shot.gain):.1f}")
+        # print(f"Shot intensity: {db(shot.gain):.1f}")
         wall: Wall
 
         # First, check whether this ray intersects the rfz. If so, return.
@@ -465,7 +465,7 @@ class Room:
 
             # Check whether this reflection passes within the RFZ
             dist_from_crit = geometry.lineseg_dist(new_pos, source_pos, listen_pos)
-            print(f"    Next intensity: {db(final_source.gain):.1f}")
+            # print(f"    Next intensity: {db(final_source.gain):.1f}")
 
             source_pos = new_pos
             if isinstance(final_source, Reflection):
@@ -551,11 +551,11 @@ class Room:
         )
         plt.gca().add_patch(circle)
         plt.draw()
-        w = self.get_wall("ABS")
-        plt.scatter(w.mesh.vertices[0][0], w.mesh.vertices[0][1])
-        plt.scatter(w.mesh.vertices[1][0], w.mesh.vertices[1][1])
-        plt.scatter(w.mesh.vertices[2][0], w.mesh.vertices[2][1])
-        plt.scatter(w.mesh.vertices[3][0], w.mesh.vertices[3][1])
+        # w = self.get_wall("ABS")
+        # plt.scatter(w.mesh.vertices[0][0], w.mesh.vertices[0][1])
+        # plt.scatter(w.mesh.vertices[1][0], w.mesh.vertices[1][1])
+        # plt.scatter(w.mesh.vertices[2][0], w.mesh.vertices[2][1])
+        # plt.scatter(w.mesh.vertices[3][0], w.mesh.vertices[3][1])
 
         # sec = self.mesh.section((0, 0, 1), (0, 0, self._lt.speaker_height))
         sec = self.mesh.section((0, 0, 1), (0, 0, 0))
